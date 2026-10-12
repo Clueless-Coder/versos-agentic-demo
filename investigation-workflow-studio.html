@@ -156,24 +156,29 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
 .edges { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; }
 
+/* Arrows take the colour of the step they come from; dashed = data feed, solid = next step */
+.edge { --ec: var(--control); }
+.edge.cat-data { --ec: var(--data); }
+.edge.cat-agent { --ec: var(--agent); }
+.edge.cat-human { --ec: var(--human); }
 .edge .edge-hit { stroke: transparent; stroke-width: 14; fill: none; pointer-events: stroke; cursor: pointer; }
-.edge .edge-line { fill: none; stroke-width: 2; stroke: #5b6475; transition: stroke .2s; }
-.edge.data .edge-line { stroke: var(--data); stroke-dasharray: 6 5; opacity: .75; }
-.edge:hover .edge-line { stroke: #9aa4b8; }
-.edge.data:hover .edge-line { opacity: 1; }
-.edge.selected .edge-line { stroke: var(--accent); stroke-width: 3; }
-.edge.fired .edge-line { stroke: var(--ok); stroke-width: 2.5; stroke-dasharray: 8 6; animation: flow 0.6s linear infinite; }
-.edge.data.fired .edge-line { stroke: var(--data); opacity: 1; }
+.edge .edge-line { fill: none; stroke-width: 2; stroke: var(--ec); opacity: .75; transition: opacity .2s, stroke-width .2s; }
+.edge.data .edge-line { stroke-dasharray: 6 5; }
+.edge:hover .edge-line { opacity: 1; }
+.edge.selected .edge-line { stroke: #fff; stroke-width: 3; opacity: 1; }
+.edge.fired .edge-line { stroke-width: 3; opacity: 1; stroke-dasharray: 16 3; animation: flow-long 0.7s linear infinite; }
+.edge.data.fired .edge-line { stroke-dasharray: 6 5; animation: flow 0.6s linear infinite; }
 .edge.dead .edge-line { opacity: .2; }
 .edge-label rect { fill: var(--panel-2); stroke: var(--border); }
 .edge-label text { fill: var(--text); font-size: 11px; }
 .temp-edge { fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 5 4; }
-@keyframes flow { to { stroke-dashoffset: -14; } }
+@keyframes flow { to { stroke-dashoffset: -11; } }
+@keyframes flow-long { to { stroke-dashoffset: -19; } }
 
 /* ---------- Nodes ---------- */
 .node {
   position: absolute; width: 220px;
-  background: var(--panel); border: 1px solid var(--border); border-top: 3px solid var(--c);
+  background: var(--panel); border: 1.5px solid var(--c); border: 1.5px solid color-mix(in srgb, var(--c) 65%, transparent); border-top: 4px solid var(--c);
   border-radius: var(--radius);
   box-shadow: 0 4px 14px rgba(0,0,0,.35);
   user-select: none; cursor: grab;
@@ -183,7 +188,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .node.cat-data { --c: var(--data); }
 .node.cat-agent { --c: var(--agent); }
 .node.cat-human { --c: var(--human); }
-.node.selected { box-shadow: 0 0 0 2px var(--accent), 0 6px 20px rgba(0,0,0,.45); }
 .node.dragging { cursor: grabbing; opacity: .9; }
 .node-head { display: flex; gap: 8px; align-items: center; padding: 9px 10px 4px; }
 .node-icon {
@@ -207,9 +211,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 .node.st-running { box-shadow: 0 0 0 2px var(--c), 0 0 22px color-mix(in srgb, var(--c) 60%, transparent); animation: pulse 1s ease-in-out infinite; }
 .node.st-waiting { box-shadow: 0 0 0 2px var(--human), 0 0 22px rgba(251,191,36,.5); animation: pulse 1.4s ease-in-out infinite; }
-.node.st-done { box-shadow: 0 0 0 2px var(--ok); }
+.node.st-done { background: color-mix(in srgb, var(--c) 13%, var(--panel)); }
 .node.st-skipped { opacity: .35; }
 .node.st-error { box-shadow: 0 0 0 2px var(--err); }
+.node.node.selected { box-shadow: 0 0 0 2px #fff, 0 6px 20px rgba(0,0,0,.45); }
 @keyframes pulse { 50% { transform: translateY(-1px); filter: brightness(1.15); } }
 
 .canvas-controls {
@@ -224,8 +229,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
   position: absolute; right: 12px; bottom: 12px; display: flex; gap: 14px; font-size: 12px; color: var(--muted);
   background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px;
 }
-.sw { display: inline-block; width: 22px; height: 0; border-top: 2px solid #5b6475; vertical-align: middle; margin-right: 6px; }
-.sw.data { border-top: 2px dashed var(--data); }
+.sw { display: inline-block; width: 22px; height: 0; border-top: 2px solid var(--muted); vertical-align: middle; margin-right: 6px; }
+.sw.data { border-top-style: dashed; }
+.legend .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--c); margin-right: 6px; vertical-align: middle; }
+.legend .sep { width: 1px; align-self: stretch; background: var(--border); }
 
 /* ---------- Inspector ---------- */
 .inspector { background: var(--panel); border-left: 1px solid var(--border); overflow-y: auto; padding: 16px; }
@@ -558,7 +565,12 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
       <button class="edge-toggle left" id="toggleLeft" aria-expanded="true" title="Hide components">«</button>
       <button class="edge-toggle right" id="toggleRight" aria-expanded="true" title="Hide side panel">»</button>
       <div class="legend">
-        <span><i class="sw flow"></i>Workflow</span>
+        <span><i class="dot" style="--c:var(--data)"></i>Data source</span>
+        <span><i class="dot" style="--c:var(--agent)"></i>AI agent</span>
+        <span><i class="dot" style="--c:var(--human)"></i>Human</span>
+        <span><i class="dot" style="--c:var(--control)"></i>Workflow step</span>
+        <span class="sep"></span>
+        <span><i class="sw flow"></i>Next step</span>
         <span><i class="sw data"></i>Data feed</span>
       </div>
     </section>
@@ -1084,15 +1096,13 @@ function bezierMid(a, b) {
 }
 
 function renderEdges() {
-  let html = `<defs>
-    <marker id="arrow-flow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7b8496"/></marker>
-    <marker id="arrow-data" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2dd4bf"/></marker>
-  </defs>`;
+  let html = `<defs>${CATEGORIES.map((c) => `<marker id="arrow-${c.id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:${c.color}"/></marker>`).join('')}</defs>`;
   for (const e of wf.edges) {
     const a = portPos(e.from, e.fromPort, 'out');
     const b = portPos(e.to, 'in', 'in');
     if (!a || !b) continue;
     const kind = isDataNode(e.from) ? 'data' : 'flow';
+    const cat = catOf(getNode(e.from));
     const sel = selection?.kind === 'edge' && selection.id === e.id ? 'selected' : '';
     const d = curve(a, { x: b.x - 4, y: b.y });
     let label = '';
@@ -1101,8 +1111,8 @@ function renderEdges() {
       const w = e.fromPort.length * 6.5 + 12;
       label = `<g class="edge-label"><rect x="${m.x - w / 2}" y="${m.y - 9}" width="${w}" height="18" rx="9"/><text x="${m.x}" y="${m.y + 4}" text-anchor="middle">${esc(e.fromPort)}</text></g>`;
     }
-    html += `<g class="edge ${kind} ${sel} ${edgeStatus[e.id] || ''}" data-id="${e.id}">
-      <path class="edge-hit" d="${d}"/><path class="edge-line" d="${d}" marker-end="url(#arrow-${kind})"/>${label}</g>`;
+    html += `<g class="edge ${kind} cat-${cat} ${sel} ${edgeStatus[e.id] || ''}" data-id="${e.id}">
+      <path class="edge-hit" d="${d}"/><path class="edge-line" d="${d}" marker-end="url(#arrow-${cat})"/>${label}</g>`;
   }
   if (tempEdge) html += `<path class="temp-edge" d="${curve(tempEdge.a, tempEdge.b)}"/>`;
   edgesSvg.innerHTML = html;
