@@ -1,0 +1,1688 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Investigation Workflow Studio</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+  <script>
+// Written in ES5 on purpose: it must run even in browsers too old for app.js,
+// so a failure shows a readable message instead of a blank canvas.
+(function () {
+  function show(msg) {
+    if (document.getElementById('startupError')) return;
+    var box = document.createElement('div');
+    box.id = 'startupError';
+    box.setAttribute('role', 'alert');
+    box.style.cssText = 'position:fixed;left:16px;right:16px;bottom:16px;z-index:99;padding:14px 16px;border-radius:10px;' +
+      'background:#3b1d22;border:1px solid #f87171;color:#fee2e2;font:14px/1.5 system-ui,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,.5)';
+    box.innerHTML = '<b>Investigation Workflow Studio hit a problem.</b><br>' +
+      'Open this file in a current version of Microsoft Edge, Google Chrome, Firefox or Safari. ' +
+      'If it already is, send this message to the person who shared the file:<br>' +
+      '<code style="display:block;margin-top:6px;white-space:pre-wrap;word-break:break-word;font-size:12px"></code>' +
+      '<button type="button" style="margin-top:8px;padding:4px 12px;border-radius:6px;border:1px solid #f87171;background:transparent;color:inherit;cursor:pointer">Dismiss</button>';
+    box.getElementsByTagName('code')[0].textContent = msg + '\nBrowser: ' + navigator.userAgent + '\nPage: ' + location.protocol + '//' + location.pathname.split('/').pop();
+    box.getElementsByTagName('button')[0].onclick = function () { box.parentNode.removeChild(box); };
+    (document.body || document.documentElement).appendChild(box);
+  }
+  window.addEventListener('error', function (e) {
+    var where = e.lineno ? ' (line ' + e.lineno + ')' : '';
+    var msg = (e.message || 'Script error') + where;
+    if (document.body) show(msg); else document.addEventListener('DOMContentLoaded', function () { show(msg); });
+  });
+  window.addEventListener('load', function () {
+    if (!window.IWS_READY) show('The app script did not finish loading.');
+  });
+})();
+  </script>
+  <style>
+/* Layout: operations console. Palette | canvas | inspector over a run log; stacks to one column on phones.
+   Deliberately dark-only: a night-shift SOC / fraud-ops look. */
+:root {
+  --font-ui: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", Consolas, "Cascadia Mono", monospace;
+  --bg: #0f1218;
+  --panel: #161a22;
+  --panel-2: #1c212b;
+  --border: #2a303c;
+  --text: #e6e9ef;
+  --muted: #8b93a5;
+  --accent: #6d8bff;
+  --control: #94a3b8;
+  --data: #2dd4bf;
+  --agent: #a78bfa;
+  --human: #fbbf24;
+  --ok: #34d399;
+  --warn: #fbbf24;
+  --err: #f87171;
+  --radius: 10px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color-scheme: dark;
+  padding: 0 !important; /* full-bleed app; bars below carry their own safe-area padding */
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  overflow: hidden;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+.muted { color: var(--muted); }
+.mono { font-family: var(--font-mono); font-size: 12.5px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- Top bar ---------- */
+.topbar {
+  display: flex; align-items: center; gap: 16px;
+  min-height: 52px;
+  padding: env(safe-area-inset-top, 0px) 16px 0;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.brand { display: flex; align-items: center; gap: 8px; font-weight: 600; white-space: nowrap; }
+.brand-mark { color: var(--accent); font-size: 20px; }
+.wf-name {
+  flex: 1; min-width: 120px; max-width: 420px;
+  background: transparent; border: 1px solid transparent; border-radius: 6px;
+  padding: 6px 8px; font-weight: 500;
+}
+.wf-name:hover, .wf-name:focus { border-color: var(--border); background: var(--panel-2); outline: none; }
+.toolbar { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.toolbar select, .speed select {
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px;
+}
+
+.btn {
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px;
+  padding: 6px 12px; cursor: pointer; white-space: nowrap;
+}
+.btn:hover { border-color: #3d4556; background: #232936; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.1); }
+.btn.danger { background: #3b1d22; border-color: #6b2b33; color: #fecaca; }
+.btn.small { padding: 3px 10px; font-size: 12.5px; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ---------- Layout ---------- */
+.layout {
+  display: grid;
+  grid-template-columns: 250px 1fr 340px;
+  min-height: 0;
+}
+
+/* ---------- Palette ---------- */
+.palette {
+  background: var(--panel); border-right: 1px solid var(--border);
+  padding: 12px; overflow-y: auto;
+}
+.search, .field input, .field textarea, .field select {
+  width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px;
+}
+.search:focus, .field input:focus, .field textarea:focus, .field select:focus { outline: none; border-color: var(--accent); }
+.pal-group { margin-top: 14px; }
+.pal-group h3 {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted);
+  margin: 0 0 6px; display: flex; align-items: center; gap: 6px;
+}
+.pal-group h3 i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.pal-item {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 8px; border: 1px solid var(--border); border-left: 3px solid var(--c);
+  border-radius: 8px; margin-bottom: 6px; background: var(--panel-2);
+  cursor: grab; user-select: none;
+}
+.pal-item:hover { border-color: var(--c); }
+.pal-item .ic { font-size: 16px; line-height: 1.2; }
+.pal-item .t { font-weight: 500; }
+.pal-item .d { font-size: 12px; color: var(--muted); }
+.hint { font-size: 12px; color: var(--muted); margin-top: 12px; }
+
+/* ---------- Canvas ---------- */
+.canvas-wrap { position: relative; min-width: 0; min-height: 0; }
+.canvas {
+  position: absolute; inset: 0; overflow: hidden; cursor: default;
+  background-color: var(--bg);
+  background-image: radial-gradient(circle, #262c38 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.canvas.panning { cursor: grabbing; }
+.canvas.drop-target { box-shadow: inset 0 0 0 2px var(--accent); }
+.world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.edges { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; }
+
+.edge .edge-hit { stroke: transparent; stroke-width: 14; fill: none; pointer-events: stroke; cursor: pointer; }
+.edge .edge-line { fill: none; stroke-width: 2; stroke: #5b6475; transition: stroke .2s; }
+.edge.data .edge-line { stroke: var(--data); stroke-dasharray: 6 5; opacity: .75; }
+.edge:hover .edge-line { stroke: #9aa4b8; }
+.edge.data:hover .edge-line { opacity: 1; }
+.edge.selected .edge-line { stroke: var(--accent); stroke-width: 3; }
+.edge.fired .edge-line { stroke: var(--ok); stroke-width: 2.5; stroke-dasharray: 8 6; animation: flow 0.6s linear infinite; }
+.edge.data.fired .edge-line { stroke: var(--data); opacity: 1; }
+.edge.dead .edge-line { opacity: .2; }
+.edge-label rect { fill: var(--panel-2); stroke: var(--border); }
+.edge-label text { fill: var(--text); font-size: 11px; }
+.temp-edge { fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 5 4; }
+@keyframes flow { to { stroke-dashoffset: -14; } }
+
+/* ---------- Nodes ---------- */
+.node {
+  position: absolute; width: 220px;
+  background: var(--panel); border: 1px solid var(--border); border-top: 3px solid var(--c);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 14px rgba(0,0,0,.35);
+  user-select: none; cursor: grab;
+  transition: box-shadow .2s, opacity .2s;
+}
+.node.cat-control { --c: var(--control); }
+.node.cat-data { --c: var(--data); }
+.node.cat-agent { --c: var(--agent); }
+.node.cat-human { --c: var(--human); }
+.node.selected { box-shadow: 0 0 0 2px var(--accent), 0 6px 20px rgba(0,0,0,.45); }
+.node.dragging { cursor: grabbing; opacity: .9; }
+.node-head { display: flex; gap: 8px; align-items: center; padding: 9px 10px 4px; }
+.node-icon {
+  width: 28px; height: 28px; flex: none; display: grid; place-items: center;
+  border-radius: 7px; background: rgba(255,255,255,.06); background: color-mix(in srgb, var(--c) 18%, transparent); font-size: 15px;
+}
+.node-title { font-weight: 600; font-size: 13.5px; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; }
+.node-type { font-size: 11px; color: var(--c); }
+.node-body { padding: 2px 12px 9px; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.node-status { margin-left: auto; font-size: 13px; }
+.ports-out { padding-bottom: 6px; }
+.port-row { position: relative; display: flex; justify-content: flex-end; align-items: center; height: 20px; padding-right: 14px; font-size: 11px; color: var(--muted); }
+.port {
+  position: absolute; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--panel); border: 2px solid var(--c); cursor: crosshair; z-index: 2;
+}
+.port:hover, .port.hot { background: var(--c); transform: scale(1.25); }
+.port.in { left: -8px; top: 20px; }
+.port.out { right: -8px; top: 3px; }
+.cat-data .port.out { border-radius: 3px; }
+
+.node.st-running { box-shadow: 0 0 0 2px var(--c), 0 0 22px color-mix(in srgb, var(--c) 60%, transparent); animation: pulse 1s ease-in-out infinite; }
+.node.st-waiting { box-shadow: 0 0 0 2px var(--human), 0 0 22px rgba(251,191,36,.5); animation: pulse 1.4s ease-in-out infinite; }
+.node.st-done { box-shadow: 0 0 0 2px var(--ok); }
+.node.st-skipped { opacity: .35; }
+.node.st-error { box-shadow: 0 0 0 2px var(--err); }
+@keyframes pulse { 50% { transform: translateY(-1px); filter: brightness(1.15); } }
+
+.canvas-controls {
+  position: absolute; left: 12px; bottom: 12px; display: flex; align-items: center; gap: 6px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 4px 8px;
+}
+.canvas-controls span { min-width: 42px; text-align: center; font-size: 12px; color: var(--muted); }
+.icon-btn { background: transparent; border: 0; cursor: pointer; width: 24px; height: 24px; border-radius: 5px; }
+.icon-btn.wide { width: auto; padding: 0 8px; }
+.icon-btn:hover { background: var(--panel-2); }
+.legend {
+  position: absolute; right: 12px; bottom: 12px; display: flex; gap: 14px; font-size: 12px; color: var(--muted);
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px;
+}
+.sw { display: inline-block; width: 22px; height: 0; border-top: 2px solid #5b6475; vertical-align: middle; margin-right: 6px; }
+.sw.data { border-top: 2px dashed var(--data); }
+
+/* ---------- Inspector ---------- */
+.inspector { background: var(--panel); border-left: 1px solid var(--border); overflow-y: auto; padding: 16px; }
+.inspector h2 { margin: 0; font-size: 16px; }
+.insp-head { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; }
+.insp-head .node-icon { width: 36px; height: 36px; font-size: 18px; }
+.insp-section { margin-top: 18px; }
+.insp-section h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 8px; }
+.field { display: block; margin-bottom: 12px; }
+.field > span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.field textarea { resize: vertical; min-height: 60px; }
+.field .help { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+.check { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; font-size: 13px; }
+.chip-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  font-size: 12px; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel-2);
+  cursor: pointer;
+}
+.chip.data { border-color: var(--border); border-color: color-mix(in srgb, var(--data) 50%, transparent); color: var(--data); }
+.chip.agent { border-color: var(--border); border-color: color-mix(in srgb, var(--agent) 50%, transparent); color: var(--agent); }
+.stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.stat { background: var(--panel-2); border: 1px solid var(--border); border-left: 3px solid var(--c); border-radius: 8px; padding: 8px 10px; }
+.stat b { display: block; font-size: 20px; }
+.stat span { font-size: 12px; color: var(--muted); }
+.tips { margin: 0; padding-left: 18px; color: var(--muted); font-size: 12.5px; line-height: 1.6; }
+.danger-zone { margin-top: 22px; display: flex; gap: 8px; }
+
+/* ---------- Run panel ---------- */
+.run-panel { padding-bottom: env(safe-area-inset-bottom, 0px); background: var(--panel); border-top: 1px solid var(--border); display: flex; flex-direction: column; }
+.run-head { display: flex; align-items: center; gap: 12px; padding: 8px 14px; border-bottom: 1px solid var(--border); }
+.run-head .speed { margin-left: auto; font-size: 12px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+.run-status { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--border); }
+.run-status.running { color: var(--accent); border-color: var(--accent); }
+.run-status.waiting { color: var(--human); border-color: var(--human); }
+.run-status.ok { color: var(--ok); border-color: var(--ok); }
+.run-status.err { color: var(--err); border-color: var(--err); }
+.run-log { height: clamp(70px, 24vh, 240px); overflow-y: auto; padding: 6px 14px 10px; font-size: 13px; }
+.run-panel.collapsed .run-log { display: none; }
+.log { display: grid; grid-template-columns: 70px 22px 1fr; gap: 6px; padding: 4px 0; border-bottom: 1px solid #1f242e; align-items: start; }
+.log .ts { color: var(--muted); font-size: 11.5px; padding-top: 1px; font-family: var(--font-mono); }
+.log .who { font-weight: 600; cursor: pointer; }
+.log .who:hover { text-decoration: underline; }
+.log.warn .msg { color: var(--warn); }
+.log.error .msg { color: var(--err); }
+.log.success .msg { color: var(--ok); }
+.log details { margin-top: 3px; }
+.log summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+.log pre { margin: 4px 0 0; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px; max-height: 220px; overflow: auto; font-size: 12px; }
+.empty-log { color: var(--muted); padding: 12px 0; }
+
+/* ---------- Modal ---------- */
+.modal { position: fixed; inset: 0; background: rgba(5,7,10,.6); display: grid; place-items: center; z-index: 50; }
+.modal[hidden] { display: none; }
+.modal-card {
+  width: min(620px, calc(100vw - 32px)); max-height: calc(100vh - 40px); overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--border); border-top: 3px solid var(--human);
+  border-radius: 12px; padding: 20px; box-shadow: 0 20px 60px rgba(0,0,0,.6);
+}
+.modal-head { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
+.modal-head h2 { margin: 0; font-size: 18px; }
+.modal-icon { font-size: 26px; }
+.modal-body { margin-bottom: 12px; }
+.modal-body .instructions { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+.kv { display: grid; grid-template-columns: 150px 1fr; gap: 4px 12px; font-size: 13px; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; word-break: break-word; }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+.modal-actions .spacer { flex: 1; }
+.btn.approve { background: #134e3a; border-color: #1f7a59; color: #bbf7d0; font-weight: 600; }
+.btn.reject { background: #4c1d24; border-color: #7f2a35; color: #fecaca; font-weight: 600; }
+
+.toast {
+  position: fixed; left: 50%; top: 64px; transform: translateX(-50%);
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.4); z-index: 60; font-size: 13px;
+}
+.toast.err { border-color: var(--err); color: #fecaca; }
+
+@media (max-width: 1100px) {
+  .layout { grid-template-columns: 210px 1fr 290px; }
+  .brand-name { display: none; }
+}
+
+/* ---------- Dialogs ---------- */
+.modal-card.plain { border-top-color: var(--accent); }
+.modal-card.plain h2 { margin: 0 0 8px; font-size: 18px; text-wrap: balance; }
+.json-box {
+  width: 100%; resize: vertical; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 6px; padding: 10px; line-height: 1.45;
+}
+.canvas { touch-action: none; }
+
+/* ---------- Phones / narrow windows ---------- */
+@media (max-width: 760px) {
+  body { display: block; height: auto; min-height: 100%; overflow-y: auto; overflow-x: hidden; }
+  .topbar { flex-wrap: wrap; gap: 8px; padding-block: calc(env(safe-area-inset-top, 0px) + 10px) 10px; }
+  .wf-name { order: 2; flex: 1 1 100%; max-width: none; }
+  .toolbar { order: 3; margin-left: 0; flex-wrap: wrap; }
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  .palette { border-right: 0; border-bottom: 1px solid var(--border); max-height: 230px; }
+  .canvas-wrap { height: 62vh; min-height: 320px; }
+  .inspector { border-left: 0; border-top: 1px solid var(--border); }
+  .legend { display: none; }
+  .run-head { flex-wrap: wrap; }
+  .kv { grid-template-columns: minmax(0, 1fr); }
+  .kv dt { margin-top: 6px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .node, .edge .edge-line { animation: none !important; transition: none !important; }
+}
+  </style>
+</head>
+<body>
+  <noscript><p style="padding:16px;color:#fff">Investigation Workflow Studio needs JavaScript. Open this file in Microsoft Edge, Chrome, Firefox or Safari with JavaScript enabled.</p></noscript>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">◈</span>
+      <span class="brand-name">Investigation Workflow Studio</span>
+    </div>
+    <input id="wfName" class="wf-name" spellcheck="false" aria-label="Workflow name">
+    <div class="toolbar">
+      <select id="templateSelect" aria-label="Load template">
+        <option value="">Templates…</option>
+        <option value="fraud">Card fraud investigation</option>
+        <option value="ato">Phishing / account takeover</option>
+        <option value="blank">Blank workflow</option>
+      </select>
+      <button id="btnImport" class="btn">Import</button>
+      <button id="btnExport" class="btn">Export JSON</button>
+      <button id="btnValidate" class="btn">Validate</button>
+      <button id="btnRun" class="btn primary">▶ Run simulation</button>
+      <button id="btnStop" class="btn danger" hidden>■ Stop</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="palette">
+      <input id="paletteSearch" class="search" placeholder="Search components…" aria-label="Search components">
+      <div id="paletteList"></div>
+      <p class="hint">Drag a component onto the canvas, or click to add it.</p>
+    </aside>
+
+    <section class="canvas-wrap">
+      <div id="canvas" class="canvas">
+        <div id="world" class="world">
+          <svg id="edges" class="edges"></svg>
+          <div id="nodes"></div>
+        </div>
+      </div>
+      <div class="canvas-controls">
+        <button class="icon-btn" id="zoomOut" title="Zoom out">−</button>
+        <span id="zoomLabel">100%</span>
+        <button class="icon-btn" id="zoomIn" title="Zoom in">+</button>
+        <button class="icon-btn wide" id="zoomFit" title="Fit workflow to view">Fit</button>
+      </div>
+      <div class="legend">
+        <span><i class="sw flow"></i>Workflow</span>
+        <span><i class="sw data"></i>Data feed</span>
+      </div>
+    </section>
+
+    <aside id="inspector" class="inspector"></aside>
+  </main>
+
+  <section id="runPanel" class="run-panel">
+    <div class="run-head">
+      <strong>Run log</strong>
+      <span id="runStatus" class="run-status idle">Idle</span>
+      <label class="speed">Speed
+        <select id="speedSelect">
+          <option value="250">Fast</option>
+          <option value="700" selected>Normal</option>
+          <option value="1400">Slow</option>
+        </select>
+      </label>
+      <button id="btnClearLog" class="btn small">Clear</button>
+      <button id="btnToggleLog" class="btn small" title="Collapse / expand">▾</button>
+    </div>
+    <div id="runLog" class="run-log"></div>
+  </section>
+
+  <div id="modal" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-head">
+        <span id="modalIcon" class="modal-icon"></span>
+        <div>
+          <h2 id="modalTitle"></h2>
+          <div id="modalMeta" class="muted"></div>
+        </div>
+      </div>
+      <div id="modalBody" class="modal-body"></div>
+      <label class="field">
+        <span>Analyst notes <em id="notesReq"></em></span>
+        <textarea id="modalNotes" rows="3" placeholder="Rationale, extra context, follow-ups…"></textarea>
+      </label>
+      <div id="modalActions" class="modal-actions"></div>
+    </div>
+  </div>
+
+  <div id="dialog" class="modal" hidden>
+    <div class="modal-card plain" role="dialog" aria-modal="true" aria-labelledby="dialogTitle">
+      <h2 id="dialogTitle"></h2>
+      <div id="dialogBody" class="modal-body"></div>
+      <div id="dialogActions" class="modal-actions"></div>
+    </div>
+  </div>
+
+  <input id="importFile" type="file" accept="application/json,.json" hidden>
+  <div id="toast" class="toast" hidden></div>
+
+  <script>window.IWS_STANDALONE = true;</script>
+  <script>
+'use strict';
+
+/* =====================================================================
+   Component catalog
+   ===================================================================== */
+
+const CATEGORIES = [
+  { id: 'control', label: 'Flow control', color: 'var(--control)' },
+  { id: 'data', label: 'Data sources', color: 'var(--data)' },
+  { id: 'agent', label: 'AI agents', color: 'var(--agent)' },
+  { id: 'human', label: 'Human analysts', color: 'var(--human)' },
+];
+
+const agentDefaults = (role, systemPrompt, outputs) => ({
+  model: 'claude-opus-5-5', role, systemPrompt, autonomy: 'recommend',
+  confidenceThreshold: 0.75, maxTurns: 10, outputs,
+});
+
+const NODE_TYPES = {
+  // Flow control
+  trigger: {
+    category: 'control', title: 'Case Trigger', icon: '⚡', inputs: false, outputs: ['out'],
+    desc: 'Starts a run from an alert or case',
+    defaults: { source: 'Fraud alert queue', payload: '{\n  "user_id": "usr_99823",\n  "amount": 4500,\n  "ip_address": "185.23.4.11"\n}' },
+  },
+  decision: {
+    category: 'control', title: 'Decision', icon: '◆', inputs: true, outputs: ['yes', 'no'],
+    desc: 'Branch on a condition over the case',
+    defaults: { condition: 'ctx.risk_score >= 70' },
+  },
+  end: {
+    category: 'control', title: 'Case Outcome', icon: '■', inputs: true, outputs: [],
+    desc: 'Final disposition of the case',
+    defaults: { outcome: 'Close – no action', notify: '' },
+  },
+
+  // Data sources
+  ds_transactions: {
+    category: 'data', title: 'Transaction Ledger', icon: '💳', inputs: false, outputs: ['data'],
+    desc: 'Historical payments for the subject',
+    defaults: { connector: 'SQL database', endpoint: 'postgres://ledger.internal/payments', query: "SELECT * FROM transactions\nWHERE user_id = :user_id\n  AND ts > now() - interval '90 days'", fields: 'amount, merchant, country, ts', refresh: 'On demand', pii: true },
+  },
+  ds_customer: {
+    category: 'data', title: 'Customer Profile', icon: '👤', inputs: false, outputs: ['data'],
+    desc: 'KYC / CRM record',
+    defaults: { connector: 'REST API', endpoint: 'https://crm.internal/api/v2/customers/{user_id}', query: '', fields: 'home_country, tenure, kyc_level, prior_disputes', refresh: 'Cached 15 min', pii: true },
+  },
+  ds_ipgeo: {
+    category: 'data', title: 'IP Geolocation & Risk', icon: '🌐', inputs: false, outputs: ['data'],
+    desc: 'Location, ASN and VPN detection',
+    defaults: { connector: 'REST API', endpoint: 'https://ipintel.internal/lookup/{ip_address}', query: '', fields: 'country, asn, is_vpn, risk', refresh: 'On demand', pii: false },
+  },
+  ds_device: {
+    category: 'data', title: 'Device Fingerprint', icon: '📱', inputs: false, outputs: ['data'],
+    desc: 'Device history and sharing',
+    defaults: { connector: 'REST API', endpoint: 'https://device.internal/fp/{user_id}', query: '', fields: 'device_id, first_seen, emulator, shared_accounts', refresh: 'On demand', pii: false },
+  },
+  ds_siem: {
+    category: 'data', title: 'SIEM Log Search', icon: '🗂️', inputs: false, outputs: ['data'],
+    desc: 'Authentication and security logs',
+    defaults: { connector: 'Splunk', endpoint: 'https://splunk.internal:8089', query: 'index=auth user=$user_id$ earliest=-7d\n| stats count by src_ip, action', fields: 'src_ip, action, count', refresh: 'On demand', pii: false },
+  },
+  ds_threatintel: {
+    category: 'data', title: 'Threat Intel Feed', icon: '🛡️', inputs: false, outputs: ['data'],
+    desc: 'IOCs, campaigns and actors',
+    defaults: { connector: 'STIX/TAXII', endpoint: 'https://cti.internal/taxii2/collections/indicators', query: '', fields: 'indicator, type, confidence, campaign', refresh: 'Real-time stream', pii: false },
+  },
+  ds_documents: {
+    category: 'data', title: 'Case Evidence', icon: '📄', inputs: false, outputs: ['data'],
+    desc: 'Files, emails and attachments',
+    defaults: { connector: 'Object storage', endpoint: 's3://case-evidence/{case_id}/', query: '', fields: 'filename, type, extracted_text', refresh: 'On demand', pii: true },
+  },
+  ds_custom: {
+    category: 'data', title: 'Custom Source', icon: '🔌', inputs: false, outputs: ['data'],
+    desc: 'Any API, database or file',
+    defaults: { connector: 'REST API', endpoint: 'https://', query: '', fields: '', refresh: 'On demand', pii: false },
+  },
+
+  // AI agents
+  agent_triage: {
+    category: 'agent', title: 'Triage Agent', icon: '🧭', inputs: true, outputs: ['out'],
+    desc: 'Scores and prioritises the case',
+    defaults: agentDefaults('triage', 'You are a triage analyst. Assess the alert, assign a risk score from 0-100 and a severity, and explain the key drivers.', 'risk_score, severity'),
+  },
+  agent_enrichment: {
+    category: 'agent', title: 'Enrichment Agent', icon: '🔎', inputs: true, outputs: ['out'],
+    desc: 'Gathers context from data sources',
+    defaults: agentDefaults('enrichment', "Gather context about the subject from every connected data source. Report anomalies against the subject's normal baseline.", 'enrichment, anomalies'),
+  },
+  agent_correlation: {
+    category: 'agent', title: 'Correlation Agent', icon: '🕸️', inputs: true, outputs: ['out'],
+    desc: 'Links related cases and entities',
+    defaults: agentDefaults('correlation', 'Correlate this case with historical cases and threat indicators. Identify linked entities and campaigns.', 'linked_cases, campaign'),
+  },
+  agent_investigator: {
+    category: 'agent', title: 'Investigator Agent', icon: '🕵️', inputs: true, outputs: ['out'],
+    desc: 'Weighs evidence, reaches a verdict',
+    defaults: agentDefaults('investigator', 'You are an expert fraud investigator. Weigh the evidence and give a verdict of [FRAUD] or [LEGITIMATE]. Always explain your chain of reasoning.', 'verdict, confidence, rationale'),
+  },
+  agent_summarizer: {
+    category: 'agent', title: 'Report Writer Agent', icon: '📝', inputs: true, outputs: ['out'],
+    desc: 'Writes the case report',
+    defaults: agentDefaults('summarizer', 'Write a concise case report: timeline, evidence, decision and recommended actions.', 'report'),
+  },
+  agent_custom: {
+    category: 'agent', title: 'Custom Agent', icon: '🤖', inputs: true, outputs: ['out'],
+    desc: 'Define your own agent',
+    defaults: agentDefaults('custom', 'Describe what this agent should do.', 'result'),
+  },
+
+  // Human analysts
+  human_review: {
+    category: 'human', title: 'Analyst Review', icon: '🧑‍💻', inputs: true, outputs: ['out'],
+    desc: 'Analyst reviews and annotates',
+    defaults: { role: 'Tier 1 Analyst', assignee: 'fraud-ops-queue', sla: '4h', instructions: 'Review the agent findings and add any context the agents missed.', requireNotes: false },
+  },
+  human_approval: {
+    category: 'human', title: 'Approval Gate', icon: '✅', inputs: true, outputs: ['approved', 'rejected'],
+    desc: 'Approve or reject a recommendation',
+    defaults: { role: 'Fraud Lead', assignee: 'fraud-leads', sla: '2h', instructions: 'Approve or reject the recommended action.', requireNotes: true },
+  },
+  human_escalation: {
+    category: 'human', title: 'Escalation', icon: '📣', inputs: true, outputs: ['out'],
+    desc: 'Hand off to a senior investigator',
+    defaults: { role: 'Senior Investigator', assignee: 'special-investigations', sla: '24h', instructions: 'Take ownership of the case and complete a full investigation.', requireNotes: true },
+  },
+};
+
+const OUTCOMES = ['Close – no action', 'Close – confirmed fraud', 'Block account & refund', 'Contain & reset credentials', 'File SAR', 'Refer to compliance', 'Refer to law enforcement'];
+
+const FIELDS = {
+  trigger: [
+    { key: 'source', label: 'Alert source', type: 'text' },
+    { key: 'payload', label: 'Sample case payload (JSON)', type: 'textarea', mono: true, rows: 7, help: 'Each field becomes ctx.<field> during a run.' },
+  ],
+  decision: [
+    { key: 'condition', label: 'Condition', type: 'text', mono: true, help: 'JavaScript expression over ctx, e.g. ctx.risk_score >= 70 && ctx.confidence > 0.8' },
+  ],
+  end: [
+    { key: 'outcome', label: 'Disposition', type: 'select', options: OUTCOMES },
+    { key: 'notify', label: 'Notify', type: 'text', placeholder: '#fraud-ops, case owner' },
+  ],
+  data: [
+    { key: 'connector', label: 'Connector', type: 'select', options: ['SQL database', 'REST API', 'GraphQL', 'Splunk', 'Elastic', 'STIX/TAXII', 'Object storage', 'CSV upload', 'Kafka stream'] },
+    { key: 'endpoint', label: 'Endpoint / connection', type: 'text', mono: true },
+    { key: 'query', label: 'Query / request template', type: 'textarea', mono: true, rows: 4, help: 'Use :field, {field} or $field$ to reference case context.' },
+    { key: 'fields', label: 'Fields exposed to agents', type: 'text' },
+    { key: 'refresh', label: 'Freshness', type: 'select', options: ['On demand', 'Cached 15 min', 'Daily snapshot', 'Real-time stream'] },
+    { key: 'pii', label: 'Contains PII — mask before sending to agents', type: 'checkbox' },
+  ],
+  agent: [
+    { key: 'model', label: 'Model', type: 'select', options: ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5', 'claude-fable-5-1'] },
+    { key: 'systemPrompt', label: 'Instructions (system prompt)', type: 'textarea', rows: 5 },
+    { key: 'autonomy', label: 'Autonomy', type: 'select', options: [['observe', 'Observe — findings only'], ['recommend', 'Recommend — humans act'], ['act', 'Act — may take containment actions']] },
+    { key: 'confidenceThreshold', label: 'Hand off to a human below confidence', type: 'number', step: 0.05, min: 0, max: 1 },
+    { key: 'maxTurns', label: 'Max reasoning / tool turns', type: 'number', step: 1, min: 1, max: 50 },
+    { key: 'outputs', label: 'Writes to case context', type: 'text', help: 'Comma-separated ctx keys this agent produces.' },
+  ],
+  human: [
+    { key: 'role', label: 'Role', type: 'text' },
+    { key: 'assignee', label: 'Assignee / queue', type: 'text' },
+    { key: 'sla', label: 'SLA', type: 'select', options: ['30m', '1h', '2h', '4h', '8h', '24h', '72h'] },
+    { key: 'instructions', label: 'Instructions to analyst', type: 'textarea', rows: 4 },
+    { key: 'requireNotes', label: 'Notes required to complete', type: 'checkbox' },
+  ],
+};
+
+const fieldsFor = (type) => FIELDS[type] || FIELDS[NODE_TYPES[type].category];
+
+/* =====================================================================
+   Templates
+   ===================================================================== */
+
+function buildTemplate(name) {
+  const n = (id, type, x, y, label, cfg = {}) => ({ id, type, x, y, label: label || NODE_TYPES[type].title, config: { ...NODE_TYPES[type].defaults, ...cfg } });
+  const e = (from, to, fromPort = 'out') => ({ id: 'e_' + from + '_' + to + '_' + fromPort, from, fromPort, to });
+
+  if (name === 'fraud') {
+    return {
+      name: 'Card fraud investigation',
+      description: 'Triage high-value card alerts, enrich with device and IP intelligence, reach a verdict and route to a human for approval.',
+      nodes: [
+        n('t1', 'trigger', 40, 330, 'Card fraud alert'),
+        n('d1', 'ds_transactions', 300, 90),
+        n('a1', 'agent_triage', 300, 330),
+        n('c1', 'decision', 570, 330, 'High risk?', { condition: 'ctx.risk_score >= 60' }),
+        n('d2', 'ds_ipgeo', 700, 40),
+        n('d3', 'ds_device', 950, 40),
+        n('a2', 'agent_enrichment', 840, 220),
+        n('d4', 'ds_customer', 1200, 40),
+        n('a3', 'agent_investigator', 1110, 220),
+        n('h1', 'human_approval', 1380, 220, 'Fraud lead approval', { instructions: 'The investigator agent recommends blocking the card. Approve to block and file a SAR, or reject to send for full investigation.' }),
+        n('o1', 'end', 1660, 130, 'Block card & file SAR', { outcome: 'File SAR', notify: '#fraud-ops' }),
+        n('h2', 'human_escalation', 1660, 330),
+        n('o2', 'end', 1930, 330, 'Investigation closed', { outcome: 'Refer to compliance' }),
+        n('a4', 'agent_summarizer', 840, 500, 'Auto-close summary'),
+        n('o3', 'end', 1110, 500, 'Auto-close', { outcome: 'Close – no action' }),
+      ],
+      edges: [
+        e('t1', 'a1'), e('d1', 'a1', 'data'), e('a1', 'c1'),
+        e('c1', 'a2', 'yes'), e('c1', 'a4', 'no'),
+        e('d2', 'a2', 'data'), e('d3', 'a2', 'data'),
+        e('a2', 'a3'), e('d4', 'a3', 'data'), e('d1', 'a3', 'data'),
+        e('a3', 'h1'), e('h1', 'o1', 'approved'), e('h1', 'h2', 'rejected'), e('h2', 'o2'),
+        e('a4', 'o3'),
+      ],
+    };
+  }
+
+  if (name === 'ato') {
+    return {
+      name: 'Phishing / account takeover',
+      description: 'Investigate a reported phishing email, check for account compromise and contain with analyst sign-off.',
+      nodes: [
+        n('t1', 'trigger', 40, 300, 'User-reported phish', { source: 'Phishing mailbox', payload: '{\n  "user_id": "jdoe",\n  "reported_by": "jdoe@corp.example",\n  "sender_domain": "micros0ft-login.example",\n  "subject": "Password expires today"\n}' }),
+        n('d1', 'ds_documents', 300, 60, 'Reported email'),
+        n('d2', 'ds_threatintel', 540, 60),
+        n('a1', 'agent_triage', 300, 300, 'Phish triage', { systemPrompt: 'Analyse the reported email for phishing indicators (sender, links, urgency, impersonation). Score risk 0-100.' }),
+        n('c1', 'decision', 580, 300, 'Malicious?', { condition: "ctx.severity !== 'low'" }),
+        n('d3', 'ds_siem', 840, 60, 'Sign-in logs'),
+        n('d4', 'ds_transactions', 1080, 60, 'Account transactions', { query: "SELECT * FROM transactions\nWHERE user_id = :user_id\n  AND ts > now() - interval '7 days'\nORDER BY ts DESC" }),
+        n('a2', 'agent_correlation', 840, 220, 'Compromise check', { systemPrompt: 'Search sign-in logs and other reports for clicks, credential submissions and suspicious logins tied to this campaign. Review recent account transactions for payments, payee changes or transfers made after the suspicious logins.', outputs: 'linked_cases, campaign, compromised, suspicious_transactions' }),
+        n('h1', 'human_review', 1110, 220, 'Fraud analyst review', { role: 'Fraud Analyst', assignee: 'fraud-ops-queue', sla: '1h', instructions: 'Confirm whether the account was taken over and whether any transactions after the suspicious logins are unauthorised. Note any payments to recall before containment.', requireNotes: true }),
+        n('a3', 'agent_summarizer', 1380, 220, 'Incident report'),
+        n('o1', 'end', 1650, 220, 'Contain account', { outcome: 'Contain & reset credentials', notify: '#soc-incidents' }),
+        n('o2', 'end', 840, 440, 'Benign — close', { outcome: 'Close – no action' }),
+      ],
+      edges: [
+        e('t1', 'a1'), e('d1', 'a1', 'data'), e('d2', 'a1', 'data'), e('a1', 'c1'),
+        e('c1', 'a2', 'yes'), e('c1', 'o2', 'no'),
+        e('d3', 'a2', 'data'), e('d2', 'a2', 'data'), e('d4', 'a2', 'data'),
+        e('a2', 'h1'), e('h1', 'a3'), e('a3', 'o1'),
+      ],
+    };
+  }
+
+  return { name: 'Untitled investigation', description: '', nodes: [n('t1', 'trigger', 80, 220)], edges: [] };
+}
+
+/* =====================================================================
+   State
+   ===================================================================== */
+
+const STORAGE_KEY = 'iws.workflow.v1';
+let wf;
+let view = { x: 40, y: 40, scale: 1 };
+let selection = null; // { kind: 'node' | 'edge', id }
+let nodeStatus = {}; // nodeId -> running|waiting|done|skipped|error
+let edgeStatus = {}; // edgeId -> fired|dead
+let run = { active: false, abort: false };
+let tempEdge = null;
+
+const $ = (s, root = document) => root.querySelector(s);
+const canvas = $('#canvas');
+const world = $('#world');
+const nodesLayer = $('#nodes');
+const edgesSvg = $('#edges');
+
+const uid = (p) => p + '_' + Math.random().toString(36).slice(2, 8);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const getNode = (id) => wf.nodes.find((n) => n.id === id);
+const catOf = (node) => NODE_TYPES[node.type].category;
+const isDataNode = (id) => { const n = getNode(id); return n && catOf(n) === 'data'; };
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const clone = (o) => JSON.parse(JSON.stringify(o));
+
+function save() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(wf)); } catch { /* storage unavailable */ }
+}
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) { const parsed = JSON.parse(raw); if (isValidWorkflow(parsed)) return parsed; }
+  } catch { /* ignore */ }
+  return buildTemplate('fraud');
+}
+
+function isValidWorkflow(o) {
+  return o && Array.isArray(o.nodes) && Array.isArray(o.edges) && o.nodes.every((n) => NODE_TYPES[n.type]);
+}
+
+function setWorkflow(next, { fit = true } = {}) {
+  wf = next;
+  selection = null;
+  resetRunVisuals();
+  $('#wfName').value = wf.name || '';
+  renderAll();
+  if (fit) requestAnimationFrame(fitView);
+  save();
+}
+
+/* =====================================================================
+   Rendering
+   ===================================================================== */
+
+function renderAll() {
+  renderNodes();
+  renderEdges();
+  renderInspector();
+}
+
+function nodeSummary(node) {
+  const c = node.config;
+  switch (catOf(node)) {
+    case 'data': return `${c.connector} · ${c.fields || 'no fields'}`;
+    case 'agent': return `${c.model} · ${c.autonomy}`;
+    case 'human': return `${c.role} · SLA ${c.sla}`;
+    default:
+      if (node.type === 'trigger') return c.source;
+      if (node.type === 'decision') return c.condition;
+      if (node.type === 'end') return c.outcome;
+      return '';
+  }
+}
+
+const STATUS_ICON = { running: '⏳', waiting: '✋', done: '✔', skipped: '–', error: '⚠' };
+
+function renderNodes() {
+  nodesLayer.innerHTML = wf.nodes.map((node) => {
+    const t = NODE_TYPES[node.type];
+    const st = nodeStatus[node.id];
+    const cls = ['node', 'cat-' + t.category, selection?.kind === 'node' && selection.id === node.id ? 'selected' : '', st ? 'st-' + st : ''].join(' ');
+    const multi = t.outputs.length > 1;
+    const outs = t.outputs.map((p) => `<div class="port-row">${multi ? esc(p) : ''}<div class="port out" data-port="${p}" title="Drag to connect"></div></div>`).join('');
+    return `<div class="${cls}" data-id="${node.id}" style="left:${node.x}px;top:${node.y}px">
+      ${t.inputs ? '<div class="port in" data-port="in" title="Input"></div>' : ''}
+      <div class="node-head">
+        <span class="node-icon">${t.icon}</span>
+        <div><div class="node-title">${esc(node.label)}</div><div class="node-type">${esc(t.title)}</div></div>
+        <span class="node-status">${st ? STATUS_ICON[st] : ''}</span>
+      </div>
+      <div class="node-body" title="${esc(nodeSummary(node))}">${esc(nodeSummary(node))}</div>
+      ${outs ? `<div class="ports-out">${outs}</div>` : '<div style="height:4px"></div>'}
+    </div>`;
+  }).join('');
+}
+
+function toWorld(clientX, clientY) {
+  const r = canvas.getBoundingClientRect();
+  return { x: (clientX - r.left - view.x) / view.scale, y: (clientY - r.top - view.y) / view.scale };
+}
+
+function portPos(nodeId, port, dir) {
+  const el = nodesLayer.querySelector(`.node[data-id="${nodeId}"] .port.${dir}[data-port="${port}"]`);
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  return toWorld(r.left + r.width / 2, r.top + r.height / 2);
+}
+
+function curve(a, b) {
+  const dx = Math.max(50, Math.abs(b.x - a.x) / 2);
+  return `M${a.x},${a.y} C${a.x + dx},${a.y} ${b.x - dx},${b.y} ${b.x},${b.y}`;
+}
+
+function bezierMid(a, b) {
+  const dx = Math.max(50, Math.abs(b.x - a.x) / 2);
+  const p1 = { x: a.x + dx, y: a.y }, p2 = { x: b.x - dx, y: b.y };
+  return { x: 0.125 * a.x + 0.375 * p1.x + 0.375 * p2.x + 0.125 * b.x, y: 0.125 * a.y + 0.375 * p1.y + 0.375 * p2.y + 0.125 * b.y };
+}
+
+function renderEdges() {
+  let html = `<defs>
+    <marker id="arrow-flow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7b8496"/></marker>
+    <marker id="arrow-data" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2dd4bf"/></marker>
+  </defs>`;
+  for (const e of wf.edges) {
+    const a = portPos(e.from, e.fromPort, 'out');
+    const b = portPos(e.to, 'in', 'in');
+    if (!a || !b) continue;
+    const kind = isDataNode(e.from) ? 'data' : 'flow';
+    const sel = selection?.kind === 'edge' && selection.id === e.id ? 'selected' : '';
+    const d = curve(a, { x: b.x - 4, y: b.y });
+    let label = '';
+    if (NODE_TYPES[getNode(e.from).type].outputs.length > 1) {
+      const m = bezierMid(a, b);
+      const w = e.fromPort.length * 6.5 + 12;
+      label = `<g class="edge-label"><rect x="${m.x - w / 2}" y="${m.y - 9}" width="${w}" height="18" rx="9"/><text x="${m.x}" y="${m.y + 4}" text-anchor="middle">${esc(e.fromPort)}</text></g>`;
+    }
+    html += `<g class="edge ${kind} ${sel} ${edgeStatus[e.id] || ''}" data-id="${e.id}">
+      <path class="edge-hit" d="${d}"/><path class="edge-line" d="${d}" marker-end="url(#arrow-${kind})"/>${label}</g>`;
+  }
+  if (tempEdge) html += `<path class="temp-edge" d="${curve(tempEdge.a, tempEdge.b)}"/>`;
+  edgesSvg.innerHTML = html;
+}
+
+function applyView() {
+  world.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
+  canvas.style.backgroundSize = `${24 * view.scale}px ${24 * view.scale}px`;
+  canvas.style.backgroundPosition = `${view.x}px ${view.y}px`;
+  $('#zoomLabel').textContent = Math.round(view.scale * 100) + '%';
+}
+
+function zoomAt(factor, cx, cy) {
+  const r = canvas.getBoundingClientRect();
+  if (cx == null) cx = r.width / 2;
+  if (cy == null) cy = r.height / 2;
+  const next = clamp(view.scale * factor, 0.3, 2);
+  view.x = cx - ((cx - view.x) * next) / view.scale;
+  view.y = cy - ((cy - view.y) * next) / view.scale;
+  view.scale = next;
+  applyView();
+}
+
+function fitView() {
+  if (!wf.nodes.length) return;
+  const r = canvas.getBoundingClientRect();
+  const els = [...nodesLayer.children];
+  const minX = Math.min(...wf.nodes.map((n) => n.x));
+  const minY = Math.min(...wf.nodes.map((n) => n.y));
+  const maxX = Math.max(...wf.nodes.map((n, i) => n.x + (els[i]?.offsetWidth || 220)));
+  const maxY = Math.max(...wf.nodes.map((n, i) => n.y + (els[i]?.offsetHeight || 100)));
+  const pad = 50;
+  view.scale = clamp(Math.min((r.width - pad * 2) / (maxX - minX), (r.height - pad * 2) / (maxY - minY)), 0.3, 1.2);
+  view.x = (r.width - (maxX - minX) * view.scale) / 2 - minX * view.scale;
+  view.y = (r.height - (maxY - minY) * view.scale) / 2 - minY * view.scale;
+  applyView();
+  renderEdges();
+}
+
+/* =====================================================================
+   Palette
+   ===================================================================== */
+
+function renderPalette(filter = '') {
+  const q = filter.trim().toLowerCase();
+  $('#paletteList').innerHTML = CATEGORIES.map((cat) => {
+    const items = Object.entries(NODE_TYPES)
+      .filter(([, t]) => t.category === cat.id)
+      .filter(([, t]) => !q || (t.title + ' ' + t.desc).toLowerCase().includes(q));
+    if (!items.length) return '';
+    return `<div class="pal-group"><h3><i style="background:${cat.color}"></i>${cat.label}</h3>
+      ${items.map(([type, t]) => `<div class="pal-item" draggable="true" data-type="${type}" style="--c:${cat.color}">
+        <span class="ic">${t.icon}</span><div><div class="t">${t.title}</div><div class="d">${t.desc}</div></div></div>`).join('')}
+    </div>`;
+  }).join('');
+}
+
+function addNode(type, pos) {
+  const t = NODE_TYPES[type];
+  const node = { id: uid('n'), type, x: Math.round(pos.x), y: Math.round(pos.y), label: t.title, config: clone(t.defaults) };
+  wf.nodes.push(node);
+  selection = { kind: 'node', id: node.id };
+  renderAll();
+  save();
+  return node;
+}
+
+/* =====================================================================
+   Graph editing
+   ===================================================================== */
+
+function createsCycle(from, to) {
+  // Would adding from->to make `from` reachable from `to` along workflow edges?
+  const stack = [to], seen = new Set();
+  while (stack.length) {
+    const id = stack.pop();
+    if (id === from) return true;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    wf.edges.filter((e) => e.from === id).forEach((e) => stack.push(e.to));
+  }
+  return false;
+}
+
+function connect(from, fromPort, to) {
+  const src = getNode(from), dst = getNode(to);
+  if (!src || !dst || from === to) return;
+  if (!NODE_TYPES[dst.type].inputs) return toast(`${NODE_TYPES[dst.type].title} has no inputs.`, true);
+  if (catOf(src) === 'data' && catOf(dst) !== 'agent') return toast('Data sources feed AI agents — connect them to an agent.', true);
+  if (wf.edges.some((e) => e.from === from && e.fromPort === fromPort && e.to === to)) return;
+  if (createsCycle(from, to)) return toast('That connection would create a loop.', true);
+  wf.edges.push({ id: uid('e'), from, fromPort, to });
+  renderEdges();
+  renderInspector();
+  save();
+}
+
+function deleteSelection() {
+  if (!selection || run.active) return;
+  if (selection.kind === 'node') {
+    wf.nodes = wf.nodes.filter((n) => n.id !== selection.id);
+    wf.edges = wf.edges.filter((e) => e.from !== selection.id && e.to !== selection.id);
+  } else {
+    wf.edges = wf.edges.filter((e) => e.id !== selection.id);
+  }
+  selection = null;
+  renderAll();
+  save();
+}
+
+function duplicateNode(id) {
+  const src = getNode(id);
+  if (!src) return;
+  const copy = { ...clone(src), id: uid('n'), x: src.x + 30, y: src.y + 30, label: src.label + ' (copy)' };
+  wf.nodes.push(copy);
+  selection = { kind: 'node', id: copy.id };
+  renderAll();
+  save();
+}
+
+/* =====================================================================
+   Inspector
+   ===================================================================== */
+
+function renderInspector() {
+  const el = $('#inspector');
+  if (selection?.kind === 'node' && getNode(selection.id)) return renderNodeInspector(el, getNode(selection.id));
+  if (selection?.kind === 'edge') {
+    const e = wf.edges.find((x) => x.id === selection.id);
+    if (e) return renderEdgeInspector(el, e);
+  }
+  renderWorkflowInspector(el);
+}
+
+function renderWorkflowInspector(el) {
+  const count = (cat) => wf.nodes.filter((n) => catOf(n) === cat).length;
+  el.innerHTML = `
+    <div class="insp-head"><span class="node-icon" style="--c:var(--accent)">◈</span><div><h2>Workflow</h2><div class="muted">${wf.nodes.length} steps · ${wf.edges.length} connections</div></div></div>
+    <label class="field"><span>Description</span><textarea id="wfDesc" rows="3" placeholder="What does this investigation workflow handle?">${esc(wf.description)}</textarea></label>
+    <div class="stats">
+      <div class="stat" style="--c:var(--data)"><b>${count('data')}</b><span>Data sources</span></div>
+      <div class="stat" style="--c:var(--agent)"><b>${count('agent')}</b><span>AI agents</span></div>
+      <div class="stat" style="--c:var(--human)"><b>${count('human')}</b><span>Human steps</span></div>
+      <div class="stat" style="--c:var(--control)"><b>${count('control')}</b><span>Control steps</span></div>
+    </div>
+    <div class="insp-section"><h4>How to build</h4>
+      <ul class="tips">
+        <li>Drag components from the left onto the canvas.</li>
+        <li>Drag from a node's right-hand port to another node to connect them.</li>
+        <li><b style="color:var(--data)">Data sources</b> plug into agents as tools/context.</li>
+        <li><b style="color:var(--human)">Human steps</b> pause the run until an analyst acts.</li>
+        <li><b>Decisions</b> branch on case context, e.g. <span class="mono">ctx.risk_score &gt;= 70</span>.</li>
+        <li>Select a node or connection to edit it; <kbd>Del</kbd> removes it.</li>
+        <li>Drag empty canvas to pan, scroll to zoom.</li>
+      </ul>
+    </div>`;
+  $('#wfDesc').addEventListener('input', (ev) => { wf.description = ev.target.value; save(); });
+}
+
+function renderEdgeInspector(el, e) {
+  const a = getNode(e.from), b = getNode(e.to);
+  const kind = catOf(a) === 'data' ? 'Data feed' : 'Workflow transition';
+  el.innerHTML = `
+    <div class="insp-head"><span class="node-icon" style="--c:var(--accent)">↦</span><div><h2>Connection</h2><div class="muted">${kind}</div></div></div>
+    <dl class="kv">
+      <dt>From</dt><dd>${NODE_TYPES[a.type].icon} ${esc(a.label)}</dd>
+      <dt>Port</dt><dd class="mono">${esc(e.fromPort)}</dd>
+      <dt>To</dt><dd>${NODE_TYPES[b.type].icon} ${esc(b.label)}</dd>
+    </dl>
+    ${catOf(a) === 'data' ? `<p class="muted" style="font-size:12.5px;margin-top:14px">${esc(b.label)} can query <b>${esc(a.label)}</b> (${esc(a.config.fields || 'all fields')}) as a tool while reasoning.</p>` : ''}
+    <div class="danger-zone"><button class="btn danger" id="btnDelEdge">Delete connection</button></div>`;
+  $('#btnDelEdge').onclick = deleteSelection;
+}
+
+function fieldHtml(f, value) {
+  const id = 'f_' + f.key;
+  if (f.type === 'checkbox') return `<label class="check"><input type="checkbox" id="${id}" data-key="${f.key}" ${value ? 'checked' : ''}> ${esc(f.label)}</label>`;
+  let input;
+  if (f.type === 'textarea') input = `<textarea id="${id}" data-key="${f.key}" rows="${f.rows || 3}" class="${f.mono ? 'mono' : ''}" spellcheck="${!f.mono}">${esc(value)}</textarea>`;
+  else if (f.type === 'select') {
+    const opts = f.options.map((o) => (Array.isArray(o) ? o : [o, o]));
+    if (!opts.some(([v]) => v === value)) opts.unshift([value, value]);
+    input = `<select id="${id}" data-key="${f.key}">${opts.map(([v, l]) => `<option value="${esc(v)}" ${v === value ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+  } else input = `<input id="${id}" data-key="${f.key}" type="${f.type}" class="${f.mono ? 'mono' : ''}" value="${esc(value)}" ${f.placeholder ? `placeholder="${esc(f.placeholder)}"` : ''} ${f.step != null ? `step="${f.step}"` : ''} ${f.min != null ? `min="${f.min}"` : ''} ${f.max != null ? `max="${f.max}"` : ''} spellcheck="false">`;
+  return `<label class="field"><span>${esc(f.label)}</span>${input}${f.help ? `<div class="help">${esc(f.help)}</div>` : ''}</label>`;
+}
+
+function renderNodeInspector(el, node) {
+  const t = NODE_TYPES[node.type];
+  const cat = catOf(node);
+  const feeds = wf.edges.filter((e) => e.to === node.id && isDataNode(e.from)).map((e) => getNode(e.from));
+  const consumers = wf.edges.filter((e) => e.from === node.id).map((e) => getNode(e.to));
+
+  let related = '';
+  if (cat === 'agent') {
+    related = `<div class="insp-section"><h4>Connected data (agent tools)</h4>
+      ${feeds.length ? `<div class="chip-list">${feeds.map((d) => `<span class="chip data" data-goto="${d.id}">${NODE_TYPES[d.type].icon} ${esc(d.label)}</span>`).join('')}</div>`
+        : '<p class="muted" style="font-size:12.5px;margin:0">No data connected. Drag from a data source\'s port to this agent.</p>'}</div>`;
+  } else if (cat === 'data') {
+    related = `<div class="insp-section"><h4>Used by</h4>
+      ${consumers.length ? `<div class="chip-list">${consumers.map((a) => `<span class="chip agent" data-goto="${a.id}">${NODE_TYPES[a.type].icon} ${esc(a.label)}</span>`).join('')}</div>`
+        : '<p class="muted" style="font-size:12.5px;margin:0">Not connected to any agent yet.</p>'}</div>`;
+  }
+
+  el.innerHTML = `
+    <div class="insp-head" style="--c:var(--${cat})"><span class="node-icon">${t.icon}</span><div><h2>${esc(t.title)}</h2><div class="muted">${esc(t.desc)}</div></div></div>
+    <label class="field"><span>Name</span><input id="f_label" value="${esc(node.label)}" spellcheck="false"></label>
+    <div class="insp-section"><h4>Configuration</h4>${fieldsFor(node.type).map((f) => fieldHtml(f, node.config[f.key])).join('')}</div>
+    ${related}
+    <div class="danger-zone">
+      <button class="btn" id="btnDup">Duplicate</button>
+      <button class="btn danger" id="btnDelNode">Delete step</button>
+    </div>`;
+
+  $('#f_label', el).addEventListener('input', (ev) => { node.label = ev.target.value; renderNodes(); renderEdges(); save(); });
+  el.querySelectorAll('[data-key]').forEach((input) => {
+    const f = fieldsFor(node.type).find((x) => x.key === input.dataset.key);
+    const handler = () => {
+      node.config[f.key] = f.type === 'checkbox' ? input.checked : f.type === 'number' ? Number(input.value) : input.value;
+      renderNodes(); renderEdges(); save();
+    };
+    input.addEventListener(f.type === 'checkbox' || f.type === 'select' ? 'change' : 'input', handler);
+  });
+  el.querySelectorAll('[data-goto]').forEach((c) => c.addEventListener('click', () => select({ kind: 'node', id: c.dataset.goto })));
+  $('#btnDup').onclick = () => duplicateNode(node.id);
+  $('#btnDelNode').onclick = deleteSelection;
+}
+
+function select(sel) {
+  selection = sel;
+  renderNodes();
+  renderEdges();
+  renderInspector();
+}
+
+/* =====================================================================
+   Canvas interaction
+   ===================================================================== */
+
+let drag = null; // { mode: 'pan'|'node'|'connect', ... }
+
+canvas.addEventListener('pointerdown', (ev) => {
+  if (ev.button !== 0) return;
+  const port = ev.target.closest('.port.out');
+  const nodeEl = ev.target.closest('.node');
+  const edgeEl = ev.target.closest('.edge');
+
+  if (port && nodeEl) {
+    const from = nodeEl.dataset.id;
+    const a = portPos(from, port.dataset.port, 'out');
+    drag = { mode: 'connect', from, fromPort: port.dataset.port };
+    tempEdge = { a, b: a };
+  } else if (nodeEl) {
+    const node = getNode(nodeEl.dataset.id);
+    const p = toWorld(ev.clientX, ev.clientY);
+    drag = { mode: 'node', node, el: nodeEl, dx: p.x - node.x, dy: p.y - node.y, moved: false };
+    if (!(selection?.kind === 'node' && selection.id === node.id)) select({ kind: 'node', id: node.id });
+    drag.el = nodesLayer.querySelector(`.node[data-id="${node.id}"]`);
+  } else if (edgeEl) {
+    select({ kind: 'edge', id: edgeEl.dataset.id });
+    return;
+  } else {
+    drag = { mode: 'pan', sx: ev.clientX, sy: ev.clientY, vx: view.x, vy: view.y, moved: false };
+    canvas.classList.add('panning');
+  }
+  canvas.setPointerCapture(ev.pointerId);
+});
+
+canvas.addEventListener('pointermove', (ev) => {
+  if (!drag) return;
+  if (drag.mode === 'pan') {
+    view.x = drag.vx + ev.clientX - drag.sx;
+    view.y = drag.vy + ev.clientY - drag.sy;
+    if (Math.abs(ev.clientX - drag.sx) + Math.abs(ev.clientY - drag.sy) > 3) drag.moved = true;
+    applyView();
+  } else if (drag.mode === 'node') {
+    const p = toWorld(ev.clientX, ev.clientY);
+    drag.node.x = Math.round(p.x - drag.dx);
+    drag.node.y = Math.round(p.y - drag.dy);
+    drag.el.style.left = drag.node.x + 'px';
+    drag.el.style.top = drag.node.y + 'px';
+    drag.el.classList.add('dragging');
+    drag.moved = true;
+    renderEdges();
+  } else if (drag.mode === 'connect') {
+    tempEdge.b = toWorld(ev.clientX, ev.clientY);
+    nodesLayer.querySelectorAll('.port.in.hot').forEach((p) => p.classList.remove('hot'));
+    const target = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.node');
+    target?.querySelector('.port.in')?.classList.add('hot');
+    renderEdges();
+  }
+});
+
+canvas.addEventListener('pointerup', (ev) => {
+  if (!drag) return;
+  if (drag.mode === 'pan' && !drag.moved) select(null);
+  if (drag.mode === 'node') { drag.el.classList.remove('dragging'); if (drag.moved) save(); }
+  if (drag.mode === 'connect') {
+    tempEdge = null;
+    const target = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.node');
+    if (target && target.dataset.id !== drag.from) connect(drag.from, drag.fromPort, target.dataset.id);
+    else renderEdges();
+  }
+  canvas.classList.remove('panning');
+  drag = null;
+});
+
+canvas.addEventListener('wheel', (ev) => {
+  ev.preventDefault();
+  const r = canvas.getBoundingClientRect();
+  zoomAt(ev.deltaY < 0 ? 1.1 : 1 / 1.1, ev.clientX - r.left, ev.clientY - r.top);
+}, { passive: false });
+
+// Palette drag & drop
+$('#paletteList').addEventListener('dragstart', (ev) => {
+  const item = ev.target.closest('.pal-item');
+  if (item) ev.dataTransfer.setData('text/plain', item.dataset.type);
+});
+$('#paletteList').addEventListener('click', (ev) => {
+  const item = ev.target.closest('.pal-item');
+  if (!item) return;
+  const r = canvas.getBoundingClientRect();
+  const p = toWorld(r.left + r.width / 2 - 110, r.top + r.height / 2 - 40);
+  addNode(item.dataset.type, { x: p.x + (Math.random() * 40 - 20), y: p.y + (Math.random() * 40 - 20) });
+});
+canvas.addEventListener('dragover', (ev) => { ev.preventDefault(); canvas.classList.add('drop-target'); });
+canvas.addEventListener('dragleave', () => canvas.classList.remove('drop-target'));
+canvas.addEventListener('drop', (ev) => {
+  ev.preventDefault();
+  canvas.classList.remove('drop-target');
+  const type = ev.dataTransfer.getData('text/plain');
+  if (!NODE_TYPES[type]) return;
+  const p = toWorld(ev.clientX, ev.clientY);
+  addNode(type, { x: p.x - 110, y: p.y - 30 });
+});
+
+document.addEventListener('keydown', (ev) => {
+  const typing = ev.target.matches('input, textarea, select');
+  if (!typing && (ev.key === 'Delete' || ev.key === 'Backspace')) { ev.preventDefault(); deleteSelection(); }
+  if (ev.key === 'Escape' && !$('#dialog').hidden) return closeDialog();
+  if (!typing && ev.key === 'Escape') select(null);
+  if (!typing && (ev.ctrlKey || ev.metaKey) && ev.key === 'd' && selection?.kind === 'node') { ev.preventDefault(); duplicateNode(selection.id); }
+});
+
+/* =====================================================================
+   Validation
+   ===================================================================== */
+
+function compileCondition(expr) {
+  // eslint-disable-next-line no-new-func
+  return new Function('ctx', `"use strict"; return (${expr});`);
+}
+
+function validate() {
+  const issues = [];
+  const add = (level, msg, nodeId) => issues.push({ level, msg, nodeId });
+  const triggers = wf.nodes.filter((n) => n.type === 'trigger');
+  if (!triggers.length) add('error', 'Add a Case Trigger to start the workflow.');
+  if (!wf.nodes.some((n) => n.type === 'end')) add('warn', 'No Case Outcome step — runs will end without a disposition.');
+
+  for (const n of wf.nodes) {
+    const t = NODE_TYPES[n.type];
+    const cat = t.category;
+    const incomingFlow = wf.edges.filter((e) => e.to === n.id && !isDataNode(e.from));
+    const outgoing = wf.edges.filter((e) => e.from === n.id);
+
+    if (n.type === 'trigger') {
+      try { JSON.parse(n.config.payload || '{}'); } catch { add('error', 'Sample payload is not valid JSON.', n.id); }
+    }
+    if (cat === 'data') {
+      if (!outgoing.length) add('warn', 'Not connected to any agent.', n.id);
+      continue;
+    }
+    if (t.inputs && !incomingFlow.length) add('warn', 'Not reachable — nothing flows into this step.', n.id);
+    for (const port of t.outputs) {
+      if (!outgoing.some((e) => e.fromPort === port)) add(t.outputs.length > 1 ? 'error' : 'warn', t.outputs.length > 1 ? `Branch “${port}” is not connected.` : 'Dead end — connect this step to a next step or an outcome.', n.id);
+    }
+    if (n.type === 'decision') {
+      try { compileCondition(n.config.condition); } catch (err) { add('error', `Condition does not parse: ${err.message}`, n.id); }
+    }
+    if (cat === 'agent' && !String(n.config.systemPrompt || '').trim()) add('error', 'Agent has no instructions.', n.id);
+    if (cat === 'agent' && n.config.autonomy === 'act' && !wf.edges.some((e) => e.from === n.id && catOf(getNode(e.to)) === 'human'))
+      add('warn', 'Agent may act autonomously and is not followed by a human step.', n.id);
+    if (cat === 'human' && !String(n.config.assignee || '').trim()) add('warn', 'No assignee or queue.', n.id);
+  }
+  return issues;
+}
+
+function showValidation() {
+  const issues = validate();
+  logSection('Validation');
+  if (!issues.length) log({ kind: 'success', msg: 'Workflow is valid and ready to run.' });
+  for (const i of issues) log({ kind: i.level === 'error' ? 'error' : 'warn', nodeId: i.nodeId, msg: i.msg });
+  return issues;
+}
+
+/* =====================================================================
+   Run log
+   ===================================================================== */
+
+const logEl = $('#runLog');
+const fmtTime = () => new Date().toLocaleTimeString([], { hour12: false });
+
+function logSection(title) {
+  if (logEl.querySelector('.empty-log')) logEl.innerHTML = '';
+  logEl.insertAdjacentHTML('beforeend', `<div class="log" style="border-bottom-color:var(--border)"><span class="ts">${fmtTime()}</span><span>▸</span><span><b>${esc(title)}</b></span></div>`);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function log({ kind = 'info', nodeId, msg, details }) {
+  if (logEl.querySelector('.empty-log')) logEl.innerHTML = '';
+  const node = nodeId && getNode(nodeId);
+  const icon = node ? NODE_TYPES[node.type].icon : { success: '✔', warn: '⚠', error: '✖' }[kind] || '·';
+  const who = node ? `<span class="who" data-goto="${node.id}">${esc(node.label)}</span> — ` : '';
+  const det = details ? `<details><summary>details</summary><pre class="mono">${esc(typeof details === 'string' ? details : JSON.stringify(details, null, 2))}</pre></details>` : '';
+  logEl.insertAdjacentHTML('beforeend', `<div class="log ${kind}"><span class="ts">${fmtTime()}</span><span>${icon}</span><span>${who}<span class="msg">${esc(msg)}</span>${det}</span></div>`);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+logEl.addEventListener('click', (ev) => {
+  const who = ev.target.closest('[data-goto]');
+  if (who && getNode(who.dataset.goto)) select({ kind: 'node', id: who.dataset.goto });
+});
+
+function setRunStatus(text, cls) {
+  const el = $('#runStatus');
+  el.textContent = text;
+  el.className = 'run-status ' + cls;
+}
+
+/* =====================================================================
+   Simulation engine
+   ===================================================================== */
+
+function resetRunVisuals() { nodeStatus = {}; edgeStatus = {}; }
+
+function setNodeStatus(id, st) { nodeStatus[id] = st; renderNodes(); renderEdges(); }
+
+const rnd = (lo, hi) => lo + Math.random() * (hi - lo);
+const round2 = (v) => Math.round(v * 100) / 100;
+
+function mockFetch(node, ctx) {
+  switch (node.type) {
+    case 'ds_transactions': return {
+      rows: 37, avg_monthly_spend: 120, max_single_txn: 310, countries: ['US'], last_txn: '2026-10-11',
+      recent: [
+        { ts: '2026-10-11 02:14', amount: 1850, payee: 'J. Marin (new payee, RO)', channel: 'online transfer', new_payee: true },
+        { ts: '2026-10-11 02:31', amount: 975, payee: 'CryptoXchange Ltd (new payee)', channel: 'card', new_payee: true },
+        { ts: '2026-10-09 12:05', amount: 42.5, payee: 'Grocery Mart', channel: 'card', new_payee: false },
+      ],
+    };
+    case 'ds_customer': return { home_country: 'US', tenure_years: 6, kyc_level: 'full', prior_disputes: 0 };
+    case 'ds_ipgeo': return { ip: ctx.ip_address || 'n/a', country: 'RO', asn: 'AS9009 M247 Ltd', is_vpn: true, risk: 'high' };
+    case 'ds_device': return { device_id: 'fp_7c21e9', first_seen: 'today', emulator: false, shared_accounts: 3 };
+    case 'ds_siem': return { failed_logins_7d: 14, new_src_ips: 3, mfa_resets: 1, impossible_travel: true };
+    case 'ds_threatintel': return { matches: 1, indicator: ctx.ip_address || ctx.sender_domain || 'n/a', campaign: 'BlackCart-2026', confidence: 'medium' };
+    case 'ds_documents': return { files: 2, types: ['eml', 'html'], urls_found: 1, credential_form: true };
+    default: return { records: 1, note: 'Sample record from custom source' };
+  }
+}
+
+function maskPii(data) {
+  const out = {};
+  for (const [k, v] of Object.entries(data)) out[k] = /name|email|phone|address|dob|ssn/i.test(k) ? '•••' : v;
+  return out;
+}
+
+function simulateAgent(node, ctx, data) {
+  const role = node.config.role;
+  const all = Object.values(data);
+  const pick = (key) => all.find((d) => d && key in d);
+  let out = {}, msg;
+
+  switch (role) {
+    case 'triage': {
+      const amt = Number(ctx.amount) || 0;
+      const hist = pick('avg_monthly_spend');
+      const drivers = [];
+      let score = 25 + Math.min(40, amt / 100);
+      if (amt) drivers.push(`amount ${amt}`);
+      if (hist && amt > hist.avg_monthly_spend * 10) { score += 15; drivers.push(`${Math.round(amt / hist.avg_monthly_spend)}× normal monthly spend`); }
+      if (ctx.sender_domain && /[0-9]/.test(ctx.sender_domain)) { score += 30; drivers.push('look-alike sender domain'); }
+      if (pick('credential_form')) { score += 15; drivers.push('credential-harvesting form'); }
+      if (pick('matches')?.matches) { score += 10; drivers.push('threat intel match'); }
+      score = clamp(Math.round(score + rnd(-4, 4)), 0, 100);
+      out = { risk_score: score, severity: score >= 70 ? 'high' : score >= 40 ? 'medium' : 'low' };
+      msg = `Risk ${score}/100 (${out.severity}). Drivers: ${drivers.join(', ') || 'none notable'}.`;
+      break;
+    }
+    case 'enrichment': {
+      const anomalies = [];
+      const ip = pick('is_vpn'), cust = pick('home_country'), dev = pick('shared_accounts'), siem = pick('failed_logins_7d');
+      if (ip?.is_vpn) anomalies.push(`IP is a VPN / data-centre address (${ip.asn}) in ${ip.country}`);
+      if (ip && cust && ip.country !== cust.home_country) anomalies.push(`Geo mismatch: ${ip.country} vs home ${cust.home_country}`);
+      if (ip && !cust && ip.country !== 'US') anomalies.push(`Transaction from unusual country ${ip.country}`);
+      if (dev?.shared_accounts > 1) anomalies.push(`Device shared across ${dev.shared_accounts} accounts`);
+      if (dev?.first_seen === 'today') anomalies.push('Device first seen today');
+      if (siem?.failed_logins_7d > 5) anomalies.push(`${siem.failed_logins_7d} failed logins in 7 days`);
+      out = { anomalies, risk_score: clamp((ctx.risk_score ?? 50) + anomalies.length * 5, 0, 100) };
+      msg = anomalies.length ? `${anomalies.length} anomalies found; risk now ${out.risk_score}.` : 'No anomalies found.';
+      break;
+    }
+    case 'correlation': {
+      const ti = pick('campaign'), siem = pick('impossible_travel'), txns = pick('recent');
+      const linked = ti ? Math.floor(rnd(2, 6)) : Math.floor(rnd(0, 2));
+      out = { linked_cases: linked, campaign: ti?.campaign || null, compromised: !!siem?.impossible_travel };
+      if (txns) {
+        const sus = txns.recent.filter((t) => t.new_payee);
+        out.suspicious_transactions = sus.map((t) => `${t.ts} · ${t.amount.toFixed(2)} to ${t.payee} (${t.channel})`);
+        out.exposure = sus.reduce((s, t) => s + t.amount, 0);
+      }
+      msg = `${linked} linked case(s)${ti ? `, attributed to campaign ${ti.campaign}` : ''}${out.compromised ? '; signs of account compromise (impossible travel)' : ''}`
+        + (out.suspicious_transactions?.length ? `; ${out.suspicious_transactions.length} transactions to new payees after the suspicious logins, exposure ${out.exposure.toFixed(2)}.` : '.');
+      break;
+    }
+    case 'investigator': {
+      const risk = ctx.risk_score ?? 50;
+      const signals = (ctx.anomalies || []).length;
+      const fraud = risk >= 65 || signals >= 2;
+      const confidence = round2(clamp(0.6 + Math.abs(risk - 50) / 150 + signals * 0.04 + rnd(-0.03, 0.03), 0, 0.99));
+      const rationale = fraud
+        ? `High risk (${risk}) with ${signals} corroborating anomalies: ${(ctx.anomalies || []).join('; ') || 'risk score alone'}.`
+        : `Activity is consistent with the subject's baseline (risk ${risk}, ${signals} anomalies).`;
+      out = { verdict: fraud ? 'FRAUD' : 'LEGITIMATE', confidence, rationale, recommended_action: fraud ? 'Block card, notify customer, file SAR' : 'Release transaction' };
+      msg = `Verdict [${out.verdict}] at ${Math.round(confidence * 100)}% confidence. Recommends: ${out.recommended_action}.`;
+      break;
+    }
+    case 'summarizer': {
+      const lines = [
+        `CASE ${ctx.case_id} — ${wf.name}`,
+        `Subject: ${ctx.user_id ?? 'n/a'}`,
+        `Risk: ${ctx.risk_score ?? 'n/a'} (${ctx.severity ?? 'n/a'})`,
+        ctx.verdict ? `Verdict: ${ctx.verdict} (${Math.round((ctx.confidence || 0) * 100)}%)` : null,
+        ctx.anomalies?.length ? `Anomalies:\n  - ${ctx.anomalies.join('\n  - ')}` : null,
+        ctx.campaign ? `Campaign: ${ctx.campaign}` : null,
+        ctx.suspicious_transactions?.length ? `Suspicious transactions (exposure ${ctx.exposure.toFixed(2)}):\n  - ${ctx.suspicious_transactions.join('\n  - ')}` : null,
+        ctx.audit.length ? `Human decisions:\n  - ${ctx.audit.map((a) => `${a.step}: ${a.decision}${a.notes ? ` — “${a.notes}”` : ''}`).join('\n  - ')}` : null,
+      ].filter(Boolean);
+      out = { report: lines.join('\n') };
+      msg = 'Case report drafted.';
+      break;
+    }
+    default:
+      out = { result: `${node.label} completed using ${Object.keys(data).length} data source(s).` };
+      msg = out.result;
+  }
+
+  const confidence = out.confidence ?? round2(rnd(0.7, 0.97));
+  return { out, msg, confidence };
+}
+
+function askHuman(node, ctx) {
+  return new Promise((resolve) => {
+    const t = NODE_TYPES[node.type];
+    const c = node.config;
+    const show = ['case_id', 'user_id', 'amount', 'sender_domain', 'risk_score', 'severity', 'verdict', 'confidence', 'recommended_action', 'campaign', 'linked_cases', 'compromised', 'exposure', 'needs_human_review'];
+    const rows = show.filter((k) => ctx[k] != null).map((k) => `<dt>${esc(k)}</dt><dd>${esc(Array.isArray(ctx[k]) ? ctx[k].join(', ') : ctx[k])}</dd>`);
+    if (ctx.anomalies?.length) rows.push(`<dt>anomalies</dt><dd>${ctx.anomalies.map(esc).join('<br>')}</dd>`);
+    if (ctx.suspicious_transactions?.length) rows.push(`<dt>suspicious transactions</dt><dd>${ctx.suspicious_transactions.map(esc).join('<br>')}</dd>`);
+    if (ctx.rationale) rows.push(`<dt>agent rationale</dt><dd>${esc(ctx.rationale)}</dd>`);
+
+    $('#modalIcon').textContent = t.icon;
+    $('#modalTitle').textContent = node.label;
+    $('#modalMeta').textContent = `${c.role} · ${c.assignee} · SLA ${c.sla}`;
+    $('#modalBody').innerHTML = `<div class="instructions">${esc(c.instructions)}</div><dl class="kv">${rows.join('')}</dl>`;
+    $('#notesReq').textContent = c.requireNotes ? '(required)' : '(optional)';
+    const notes = $('#modalNotes');
+    notes.value = '';
+
+    const actions = t.outputs.length > 1
+      ? t.outputs.map((p, i) => `<button class="btn ${i === 0 ? 'approve' : 'reject'}" data-port="${p}">${{ approved: 'Approve', rejected: 'Reject' }[p] || p[0].toUpperCase() + p.slice(1)}</button>`)
+      : [`<button class="btn approve" data-port="${t.outputs[0]}">Complete review</button>`];
+    $('#modalActions').innerHTML = `<button class="btn" data-abort>Abort run</button><span class="spacer"></span>${actions.join('')}`;
+
+    const modal = $('#modal');
+    modal.hidden = false;
+    setTimeout(() => notes.focus(), 50);
+
+    $('#modalActions').onclick = (ev) => {
+      const b = ev.target.closest('button');
+      if (!b) return;
+      if (b.hasAttribute('data-abort')) { modal.hidden = true; return resolve(null); }
+      if (c.requireNotes && !notes.value.trim()) { notes.focus(); return toast('Notes are required for this step.', true); }
+      modal.hidden = true;
+      resolve({ port: b.dataset.port, notes: notes.value.trim() });
+    };
+  });
+}
+
+async function executeNode(node, ctx, speed) {
+  const c = node.config;
+  const cat = catOf(node);
+
+  if (node.type === 'trigger') {
+    log({ nodeId: node.id, msg: `Case ${ctx.case_id} opened from “${c.source}”.`, details: JSON.parse(c.payload || '{}') });
+    return ['out'];
+  }
+
+  if (node.type === 'decision') {
+    let result;
+    try { result = !!compileCondition(c.condition)(ctx); } catch (err) {
+      setNodeStatus(node.id, 'error');
+      throw new Error(`Condition failed on “${node.label}”: ${err.message}`);
+    }
+    log({ kind: 'info', nodeId: node.id, msg: `${c.condition} → ${result ? 'yes' : 'no'}` });
+    return [result ? 'yes' : 'no'];
+  }
+
+  if (node.type === 'end') {
+    ctx.outcome = c.outcome;
+    log({ kind: 'success', nodeId: node.id, msg: `Disposition: ${c.outcome}${c.notify ? ` · notified ${c.notify}` : ''}.` });
+    return [];
+  }
+
+  if (cat === 'agent') {
+    const feeds = wf.edges.filter((e) => e.to === node.id && isDataNode(e.from));
+    const data = {};
+    for (const e of feeds) {
+      const ds = getNode(e.from);
+      edgeStatus[e.id] = 'fired';
+      setNodeStatus(ds.id, 'running');
+      await sleep(speed / 2);
+      let rec = mockFetch(ds, ctx);
+      if (ds.config.pii) rec = maskPii(rec);
+      data[ds.label] = rec;
+      setNodeStatus(ds.id, 'done');
+      log({ kind: 'info', nodeId: ds.id, msg: `Queried by ${node.label} via ${ds.config.connector}${ds.config.pii ? ' (PII masked)' : ''}.`, details: rec });
+    }
+    await sleep(speed);
+    const { out, msg, confidence } = simulateAgent(node, ctx, data);
+    Object.assign(ctx, out);
+    log({ kind: 'info', nodeId: node.id, msg: `[${c.model}] ${msg}`, details: out });
+    if (confidence < Number(c.confidenceThreshold)) {
+      ctx.needs_human_review = true;
+      log({ kind: 'warn', nodeId: node.id, msg: `Confidence ${Math.round(confidence * 100)}% is below the ${Math.round(c.confidenceThreshold * 100)}% threshold — flagged for human review.` });
+    }
+    if (c.autonomy === 'act' && out.verdict === 'FRAUD') {
+      ctx.actions_taken = [...(ctx.actions_taken || []), 'Card temporarily frozen'];
+      log({ kind: 'warn', nodeId: node.id, msg: 'Autonomous action taken: card temporarily frozen pending review.' });
+    }
+    return ['out'];
+  }
+
+  if (cat === 'human') {
+    setNodeStatus(node.id, 'waiting');
+    setRunStatus(`Waiting on ${node.config.role}`, 'waiting');
+    log({ kind: 'warn', nodeId: node.id, msg: `Assigned to ${c.assignee} (${c.role}), SLA ${c.sla}. Waiting for analyst…` });
+    const answer = await askHuman(node, ctx);
+    if (!answer) { run.abort = true; return []; }
+    setRunStatus('Running', 'running');
+    ctx.audit.push({ step: node.label, by: c.role, decision: answer.port, notes: answer.notes, at: new Date().toISOString() });
+    log({ kind: 'success', nodeId: node.id, msg: `${c.role} ${answer.port === 'out' ? 'completed review' : '→ ' + answer.port}${answer.notes ? ` — “${answer.notes}”` : ''}` });
+    return [answer.port];
+  }
+
+  return NODE_TYPES[node.type].outputs;
+}
+
+async function runWorkflow() {
+  if (run.active) return;
+  const issues = validate();
+  const errors = issues.filter((i) => i.level === 'error');
+  if (errors.length) {
+    showValidation();
+    setRunStatus('Fix errors to run', 'err');
+    return toast(`${errors.length} error(s) — see the run log.`, true);
+  }
+
+  run = { active: true, abort: false };
+  resetRunVisuals();
+  selection = null;
+  renderAll();
+  $('#btnRun').hidden = true;
+  $('#btnStop').hidden = false;
+  setRunStatus('Running', 'running');
+
+  const speed = Number($('#speedSelect').value);
+  const ctx = { case_id: 'CASE-' + Math.floor(rnd(10000, 99999)), audit: [] };
+  logSection(`Run ${ctx.case_id} — ${wf.name}`);
+  issues.forEach((i) => log({ kind: 'warn', nodeId: i.nodeId, msg: i.msg }));
+
+  const flowEdges = wf.edges.filter((e) => !isDataNode(e.from));
+  const triggers = wf.nodes.filter((n) => n.type === 'trigger');
+  for (const t of triggers) { try { Object.assign(ctx, JSON.parse(t.config.payload || '{}')); } catch { /* validated */ } }
+
+  const queue = triggers.map((t) => t.id);
+  const done = new Set();
+  let failed = false;
+
+  try {
+    while (queue.length && !run.abort) {
+      const id = queue.shift();
+      if (done.has(id)) continue;
+      const node = getNode(id);
+      const incoming = flowEdges.filter((e) => e.to === id);
+      if (incoming.some((e) => !edgeStatus[e.id])) continue; // wait for all upstream branches to resolve
+      done.add(id);
+
+      const live = incoming.length === 0 || incoming.some((e) => edgeStatus[e.id] === 'fired');
+      let fired = [];
+      if (live) {
+        setNodeStatus(id, 'running');
+        await sleep(speed / 2);
+        fired = await executeNode(node, ctx, speed);
+        if (run.abort) break;
+        setNodeStatus(id, 'done');
+      } else {
+        setNodeStatus(id, 'skipped');
+      }
+      for (const e of flowEdges.filter((x) => x.from === id)) {
+        edgeStatus[e.id] = fired.includes(e.fromPort) ? 'fired' : 'dead';
+        queue.push(e.to);
+      }
+      renderEdges();
+    }
+  } catch (err) {
+    failed = true;
+    log({ kind: 'error', msg: err.message });
+  }
+
+  // Anything never reached is marked skipped for clarity
+  wf.nodes.filter((n) => catOf(n) !== 'data' && !nodeStatus[n.id]).forEach((n) => { nodeStatus[n.id] = 'skipped'; });
+  wf.nodes.filter((n) => catOf(n) === 'data' && !nodeStatus[n.id]).forEach((n) => { nodeStatus[n.id] = 'skipped'; });
+  renderNodes(); renderEdges();
+
+  if (failed) setRunStatus('Failed', 'err');
+  else if (run.abort) { setRunStatus('Aborted', 'err'); log({ kind: 'warn', msg: 'Run aborted.' }); }
+  else {
+    setRunStatus(ctx.outcome ? `Completed — ${ctx.outcome}` : 'Completed', 'ok');
+    const { audit, ...rest } = ctx;
+    log({ kind: 'success', msg: `Run complete${ctx.outcome ? `: ${ctx.outcome}` : ''}.`, details: { ...rest, audit } });
+  }
+  run.active = false;
+  $('#btnRun').hidden = false;
+  $('#btnStop').hidden = true;
+}
+
+/* =====================================================================
+   Toolbar, import/export
+   ===================================================================== */
+
+let toastTimer;
+function toast(msg, isErr = false) {
+  const el = $('#toast');
+  el.textContent = msg;
+  el.className = 'toast' + (isErr ? ' err' : '');
+  el.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.hidden = true; }, 2800);
+}
+
+// In-page dialog (browser confirm() and file downloads are unavailable when hosted in a sandboxed frame)
+function openDialog({ title, body, actions }) {
+  $('#dialogTitle').textContent = title;
+  $('#dialogBody').innerHTML = body;
+  const bar = $('#dialogActions');
+  bar.innerHTML = '';
+  for (const a of actions) {
+    const b = document.createElement('button');
+    b.id = 'dlg_' + a.id;
+    b.className = 'btn ' + (a.cls || '');
+    b.textContent = a.label;
+    b.onclick = async () => { if ((await a.onClick?.()) !== false) closeDialog(); };
+    bar.append(b);
+  }
+  $('#dialog').hidden = false;
+}
+const closeDialog = () => { $('#dialog').hidden = true; };
+
+function exportJson() {
+  const json = JSON.stringify({ format: 'investigation-workflow/v1', ...wf }, null, 2);
+  openDialog({
+    title: 'Export workflow',
+    body: `<p class="muted">Copy this JSON to keep the workflow or send it to a colleague. They can load it with Import.</p>
+      <textarea id="exportText" class="mono json-box" rows="14" readonly>${esc(json)}</textarea>`,
+    actions: [
+      { id: 'close', label: 'Close' },
+      // File downloads only work outside the sandboxed artifact host, so the standalone build opts in
+      ...(window.IWS_STANDALONE ? [{ id: 'download', label: 'Download .json', onClick: () => downloadJson(json) }] : []),
+      { id: 'copy', label: 'Copy JSON', cls: 'primary', onClick: async () => {
+        try { await navigator.clipboard.writeText(json); toast('Workflow JSON copied.'); }
+        catch { const ta = $('#exportText'); ta.focus(); ta.select(); toast('Press Ctrl+C to copy the selected JSON.'); return false; }
+      } },
+    ],
+  });
+}
+
+function downloadJson(json) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+  a.download = (wf.name || 'workflow').toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+function importText(text) {
+  try {
+    const { format, ...data } = JSON.parse(text);
+    if (!isValidWorkflow(data)) throw new Error('this JSON is not a workflow (it needs nodes and edges of known types)');
+    setWorkflow(data);
+    toast(`Imported “${data.name}”.`);
+  } catch (err) { toast(`Import failed: ${err.message}`, true); return false; }
+}
+
+function importDialog() {
+  openDialog({
+    title: 'Import workflow',
+    body: `<p class="muted">Paste workflow JSON, or choose a .json file. This replaces the current canvas.</p>
+      <textarea id="importText" class="mono json-box" rows="12" spellcheck="false" placeholder='{ "name": "…", "nodes": [ … ], "edges": [ … ] }'></textarea>`,
+    actions: [
+      { id: 'file', label: 'Choose file…', onClick: () => { $('#importFile').click(); } },
+      { id: 'cancel', label: 'Cancel' },
+      { id: 'import', label: 'Import', cls: 'primary', onClick: () => importText($('#importText').value) },
+    ],
+  });
+}
+
+$('#btnExport').onclick = exportJson;
+$('#btnImport').onclick = importDialog;
+$('#importFile').addEventListener('change', async (ev) => {
+  const file = ev.target.files[0];
+  ev.target.value = '';
+  if (file) importText(await file.text());
+});
+
+$('#templateSelect').addEventListener('change', (ev) => {
+  const v = ev.target.value;
+  ev.target.value = '';
+  if (!v || run.active) return;
+  const apply = () => setWorkflow(buildTemplate(v));
+  if (wf.nodes.length <= 1) return apply();
+  openDialog({
+    title: 'Replace the current workflow?',
+    body: '<p class="muted">Loading a template replaces everything on the canvas. Use Export JSON first if you want to keep it.</p>',
+    actions: [{ id: 'cancel', label: 'Cancel' }, { id: 'ok', label: 'Load template', cls: 'primary', onClick: apply }],
+  });
+});
+
+$('#wfName').addEventListener('input', (ev) => { wf.name = ev.target.value; save(); });
+$('#btnValidate').onclick = showValidation;
+$('#btnRun').onclick = runWorkflow;
+$('#btnStop').onclick = () => { run.abort = true; $('#modal').hidden = true; };
+$('#btnClearLog').onclick = () => { logEl.innerHTML = '<div class="empty-log">Run log cleared.</div>'; if (!run.active) { resetRunVisuals(); renderNodes(); renderEdges(); setRunStatus('Idle', 'idle'); } };
+$('#btnToggleLog').onclick = () => {
+  const p = $('#runPanel');
+  p.classList.toggle('collapsed');
+  $('#btnToggleLog').textContent = p.classList.contains('collapsed') ? '▴' : '▾';
+  requestAnimationFrame(renderEdges);
+};
+$('#zoomIn').onclick = () => { zoomAt(1.2); renderEdges(); };
+$('#zoomOut').onclick = () => { zoomAt(1 / 1.2); renderEdges(); };
+$('#zoomFit').onclick = fitView;
+$('#paletteSearch').addEventListener('input', (ev) => renderPalette(ev.target.value));
+window.addEventListener('resize', renderEdges);
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+
+renderPalette();
+applyView();
+logEl.innerHTML = '<div class="empty-log">Press <b>▶ Run simulation</b> to walk a sample case through the workflow. Human steps will pause for your decision.</div>';
+setWorkflow(load());
+window.IWS_READY = true;
+  </script>
+</body>
+</html>
