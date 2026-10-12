@@ -375,7 +375,10 @@ body .layout.right-collapsed { --rw: 40px; }
 .edge-toggle.right { right: 0; border-right: 0; border-radius: 8px 0 0 8px; }
 body.kiosk .run-panel { display: none; }
 body.kiosk .inspector { display: flex; flex-direction: column; min-height: 0; padding-top: 0; }
-@media (max-width: 1500px) { body.kiosk .wf-name { display: none; } }
+body.kiosk .wf-name { display: none; }
+body.kiosk .toolbar { font-size: 0.88em; gap: 0.6em; }
+body.kiosk .toolbar .btn { padding: 0.45em 0.85em; }
+body.kiosk .toolbar select { width: 9.5em; padding: 0.45em 0.5em; }
 .panel-tabs { display: flex; gap: 0.3em; margin: 0 -0.2em 0.9em; padding-top: 0.8em; border-bottom: 1px solid var(--border); }
 .panel-tab {
   flex: 1; background: none; border: 0; border-bottom: 2px solid transparent; padding: 0.5em 0.4em; cursor: pointer;
@@ -501,6 +504,11 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
       <button id="btnReset" class="btn kiosk-only" title="Put this workflow back the way it started">Reset to original</button>
       <button id="btnRun" class="btn primary">▶ Run simulation</button>
       <button id="btnStop" class="btn danger" hidden>■ Stop</button>
+      <select id="kioskSpeed" class="kiosk-only" aria-label="Speed" title="How fast the case moves through the workflow">
+        <option value="relaxed">Speed: Relaxed</option>
+        <option value="normal" selected>Speed: Normal</option>
+        <option value="fast">Speed: Fast</option>
+      </select>
       <button id="btnRestart" class="btn kiosk-only">↺ Start over</button>
     </div>
   </header>
@@ -542,9 +550,9 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
       <span id="runStatus" class="run-status idle">Idle</span>
       <label class="speed">Speed
         <select id="speedSelect">
-          <option value="250">Fast</option>
-          <option value="700" selected>Normal</option>
-          <option value="1400">Slow</option>
+          <option value="fast">Fast</option>
+          <option value="normal" selected>Normal</option>
+          <option value="relaxed">Slow</option>
         </select>
       </label>
       <button id="btnClearLog" class="btn small">Clear</button>
@@ -1776,7 +1784,17 @@ function askHuman(node, ctx) {
   });
 }
 
-async function executeNode(node, ctx, speed) {
+// Run pacing (ms): step highlighted before it starts, agent working time,
+// each data source lookup, and the pause on a connection before the next step.
+const PACES = {
+  relaxed: { start: 2200, think: 3800, source: 1800, edge: 1200 },
+  normal: { start: 1500, think: 2500, source: 1200, edge: 800 },
+  fast: { start: 550, think: 1100, source: 550, edge: 300 },
+};
+// Read on every wait, so changing the speed mid-run takes effect straight away
+const pace = () => PACES[$(KIOSK ? '#kioskSpeed' : '#speedSelect').value] || PACES.normal;
+
+async function executeNode(node, ctx) {
   const c = node.config;
   const cat = catOf(node);
 
@@ -1816,7 +1834,7 @@ async function executeNode(node, ctx, speed) {
       const ds = getNode(e.from);
       edgeStatus[e.id] = 'fired';
       setNodeStatus(ds.id, 'running');
-      await sleep(speed / 2);
+      await sleep(pace().source);
       let rec = mockFetch(ds, ctx);
       if (ds.config.pii) rec = maskPii(rec);
       data[ds.label] = rec;
@@ -1825,7 +1843,7 @@ async function executeNode(node, ctx, speed) {
       narrate({ icon: NODE_TYPES[ds.type].icon, cat: 'data', title: `${node.label} checks: ${ds.label}`, text: PLAIN[ds.type] + (ds.config.pii ? '. Personal details are masked first.' : '.') });
     }
     if (run.abort) return [];
-    await sleep(speed);
+    await sleep(pace().think);
     const { out, msg, confidence, story: beat } = simulateAgent(node, ctx, data);
     Object.assign(ctx, out);
     log({ kind: 'info', nodeId: node.id, msg: `[${c.model}] ${msg}`, details: out });
@@ -1890,7 +1908,6 @@ async function runWorkflow() {
   $('#btnStop').hidden = false;
   setRunStatus('Running', 'running');
 
-  const speed = KIOSK ? 1100 : Number($('#speedSelect').value);
   const startedAt = Date.now();
   const ctx = { case_id: 'CASE-' + Math.floor(rnd(10000, 99999)), audit: [] };
   logSection(`Run ${ctx.case_id} — ${wf.name}`);
@@ -1917,8 +1934,8 @@ async function runWorkflow() {
       let fired = [];
       if (live) {
         setNodeStatus(id, 'running');
-        await sleep(speed / 2);
-        fired = await executeNode(node, ctx, speed);
+        await sleep(pace().start);
+        fired = await executeNode(node, ctx);
         if (run.abort) break;
         setNodeStatus(id, 'done');
       } else {
@@ -1929,6 +1946,7 @@ async function runWorkflow() {
         queue.push(e.to);
       }
       renderEdges();
+      if (fired.length && !run.abort) await sleep(pace().edge); // let the eye follow the arrow
     }
   } catch (err) {
     failed = true;
@@ -2112,6 +2130,7 @@ async function showWelcome() {
   story = [];
   panelTab = 'story';
   scenario = 'fraud';
+  $('#kioskSpeed').value = 'normal';
   setPanel('left', true);
   setPanel('right', true);
   setWorkflow(buildTemplate('fraud'));
