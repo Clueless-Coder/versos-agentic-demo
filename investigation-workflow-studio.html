@@ -350,6 +350,18 @@ body.kiosk .brand { font-size: 1.15em; }
 body.kiosk .wf-name { pointer-events: none; color: var(--muted); max-width: 40%; }
 body.kiosk .layout { --lw: clamp(190px, 17%, 300px); --rw: clamp(300px, 28%, 520px); }
 
+/* Big screens (wider than 1920 CSS px, e.g. a 4K display at 100% scaling): scale the interface
+   chrome by --ui (set from JS: width / 1920, max 2) so it looks the same as on a 1920 screen.
+   The map canvas is not zoomed: it has its own zoom, and pointer maths stays simple. */
+:root { --ui: 1; }
+.brand, .toolbar, .wf-name, .palette > *, .inspector > *, .run-panel > *, .modal-card, .overlay-card,
+.toast, .canvas-controls, .legend, .edge-toggle, .palette.collapsed::after, .inspector.collapsed::after { zoom: var(--ui); }
+@media (min-width: 1921px) {
+  .layout { --lw: 13%; --rw: 17.7%; }
+  body.kiosk .layout { --lw: 15.6%; --rw: 27%; }
+  .topbar { min-height: calc(52px * var(--ui)); }
+}
+
 /* Collapsible side panels: a collapsed panel becomes a thin labelled strip */
 body .layout.left-collapsed { --lw: 40px; }
 body .layout.right-collapsed { --rw: 40px; }
@@ -1111,7 +1123,8 @@ function fitView() {
   const maxX = Math.max(...wf.nodes.map((n, i) => n.x + (els[i]?.offsetWidth || 220)));
   const maxY = Math.max(...wf.nodes.map((n, i) => n.y + (els[i]?.offsetHeight || 100)));
   const pad = 50;
-  view.scale = clamp(Math.min((r.width - pad * 2) / (maxX - minX), (r.height - pad * 2) / (maxY - minY)), 0.3, 1.2);
+  // The public view may zoom in further so the workflow fills big screens
+  view.scale = clamp(Math.min((r.width - pad * 2) / (maxX - minX), (r.height - pad * 2) / (maxY - minY)), 0.3, KIOSK ? 2 : 1.2);
   view.x = (r.width - (maxX - minX) * view.scale) / 2 - minX * view.scale;
   view.y = (r.height - (maxY - minY) * view.scale) / 2 - minY * view.scale;
   applyView();
@@ -2091,7 +2104,11 @@ $('#toggleRight').onclick = () => setPanel('right', !panelOpen('right'));
 $('.palette').addEventListener('click', (ev) => { if (!panelOpen('left')) { ev.stopPropagation(); setPanel('left', true); } }, true);
 $('#inspector').addEventListener('click', (ev) => { if (!panelOpen('right')) { ev.stopPropagation(); setPanel('right', true); } }, true);
 $('#paletteSearch').addEventListener('input', (ev) => renderPalette(ev.target.value));
-window.addEventListener('resize', () => (KIOSK ? fitView() : renderEdges()));
+function applyUiScale() {
+  document.documentElement.style.setProperty('--ui', String(clamp(innerWidth / 1920, 1, 2)));
+}
+window.addEventListener('resize', () => { applyUiScale(); KIOSK ? fitView() : renderEdges(); });
+applyUiScale();
 
 /* =====================================================================
    Kiosk mode: welcome, outcome, auto-reset
