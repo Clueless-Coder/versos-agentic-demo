@@ -110,8 +110,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* ---------- Layout ---------- */
 .layout {
+  --lw: 250px; --rw: 340px;
   display: grid;
-  grid-template-columns: 250px 1fr 340px;
+  grid-template-columns: var(--lw) minmax(0, 1fr) var(--rw);
   min-height: 0;
 }
 
@@ -304,7 +305,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .toast.err { border-color: var(--err); color: #fecaca; }
 
 @media (max-width: 1100px) {
-  .layout { grid-template-columns: 210px 1fr 290px; }
+  .layout { --lw: 210px; --rw: 290px; }
   .brand-name { display: none; }
 }
 
@@ -328,6 +329,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .canvas-wrap { height: 62vh; min-height: 320px; }
   .inspector { border-left: 0; border-top: 1px solid var(--border); }
   .legend { display: none; }
+  .edge-toggle { display: none; }
   .run-head { flex-wrap: wrap; }
   .kv { grid-template-columns: minmax(0, 1fr); }
   .kv dt { margin-top: 6px; }
@@ -346,7 +348,31 @@ body.kiosk { font-size: clamp(13px, 0.95vw + 2px, 19px); }
 body.kiosk .topbar { min-height: 7vh; gap: 2%; padding-inline: 1.5%; }
 body.kiosk .brand { font-size: 1.15em; }
 body.kiosk .wf-name { pointer-events: none; color: var(--muted); max-width: 40%; }
-body.kiosk .layout { grid-template-columns: clamp(190px, 17%, 300px) minmax(0, 1fr) clamp(300px, 28%, 520px); }
+body.kiosk .layout { --lw: clamp(190px, 17%, 300px); --rw: clamp(300px, 28%, 520px); }
+
+/* Collapsible side panels: a collapsed panel becomes a thin labelled strip */
+body .layout.left-collapsed { --lw: 40px; }
+body .layout.right-collapsed { --rw: 40px; }
+.palette.collapsed, .inspector.collapsed { padding: 0 !important; overflow: hidden; cursor: pointer; position: relative; }
+.palette.collapsed > *, .inspector.collapsed > * { display: none !important; }
+.palette.collapsed::after, .inspector.collapsed::after {
+  content: attr(data-label); position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  writing-mode: vertical-rl; color: var(--muted); font-weight: 600; letter-spacing: .06em; white-space: nowrap;
+}
+.palette.collapsed:hover, .inspector.collapsed:hover { background: var(--panel-2); }
+.palette.collapsed:hover::after, .inspector.collapsed:hover::after { color: var(--text); }
+.inspector.collapsed.has-news::before {
+  content: ''; position: absolute; top: 14px; left: 50%; width: 10px; height: 10px; margin-left: -5px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 0 0 rgba(109,139,255,.7); animation: news 1.4s ease-out infinite;
+}
+@keyframes news { to { box-shadow: 0 0 0 10px rgba(109,139,255,0); } }
+.edge-toggle {
+  position: absolute; top: 50%; z-index: 5; width: 22px; height: 64px; margin-top: -32px; padding: 0;
+  background: var(--panel); border: 1px solid var(--border); color: var(--muted); cursor: pointer; font-size: 14px;
+}
+.edge-toggle:hover { color: var(--text); background: var(--panel-2); }
+.edge-toggle.left { left: 0; border-left: 0; border-radius: 0 8px 8px 0; }
+.edge-toggle.right { right: 0; border-right: 0; border-radius: 8px 0 0 8px; }
 body.kiosk .run-panel { display: none; }
 body.kiosk .inspector { display: flex; flex-direction: column; min-height: 0; padding-top: 0; }
 @media (max-width: 1500px) { body.kiosk .wf-name { display: none; } }
@@ -446,6 +472,7 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
   /* portrait screens: story panel goes under the canvas */
   body.kiosk .layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: 22% 46% 32%; }
   body.kiosk .palette { border-right: 0; border-bottom: 1px solid var(--border); }
+  body.kiosk .edge-toggle { display: none; }
   body.kiosk .inspector { border-left: 0; border-top: 1px solid var(--border); }
   .scenarios { grid-template-columns: minmax(0, 1fr); }
 }
@@ -479,7 +506,7 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
   </header>
 
   <main class="layout">
-    <aside class="palette">
+    <aside class="palette" data-label="Components">
       <input id="paletteSearch" class="search" placeholder="Search components…" aria-label="Search components">
       <div id="paletteList"></div>
       <p class="hint">Drag a component onto the canvas, or click to add it.</p>
@@ -498,6 +525,8 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
         <button class="icon-btn" id="zoomIn" title="Zoom in">+</button>
         <button class="icon-btn wide" id="zoomFit" title="Fit workflow to view">Fit</button>
       </div>
+      <button class="edge-toggle left" id="toggleLeft" aria-expanded="true" title="Hide components">«</button>
+      <button class="edge-toggle right" id="toggleRight" aria-expanded="true" title="Hide side panel">»</button>
       <div class="legend">
         <span><i class="sw flow"></i>Workflow</span>
         <span><i class="sw data"></i>Data feed</span>
@@ -1242,6 +1271,7 @@ function renderStory(el) {
 function narrate(beat) {
   story.push(beat);
   lastActivity = Date.now();
+  if (!panelOpen('right')) $('#inspector').classList.add('has-news');
   if (KIOSK && panelTab === 'story') renderInspector();
 }
 
@@ -1314,6 +1344,20 @@ function renderNodeInspector(el, node) {
   $('#btnDelNode').onclick = deleteSelection;
 }
 
+const panelOpen = (side) => !$('.layout').classList.contains(side + '-collapsed');
+
+function setPanel(side, open) {
+  const el = side === 'left' ? $('.palette') : $('#inspector');
+  const btn = side === 'left' ? $('#toggleLeft') : $('#toggleRight');
+  $('.layout').classList.toggle(side + '-collapsed', !open);
+  el.classList.toggle('collapsed', !open);
+  if (open) el.classList.remove('has-news');
+  btn.textContent = (side === 'left') === open ? '«' : '»';
+  btn.title = `${open ? 'Hide' : 'Show'} ${side === 'left' ? 'components' : 'side panel'}`;
+  btn.setAttribute('aria-expanded', String(open));
+  requestAnimationFrame(fitView);
+}
+
 function select(sel) {
   selection = sel;
   if (KIOSK && sel && !run.active) panelTab = 'settings';
@@ -1348,6 +1392,7 @@ canvas.addEventListener('pointerdown', (ev) => {
     drag.el = nodesLayer.querySelector(`.node[data-id="${node.id}"]`);
   } else if (edgeEl) {
     select({ kind: 'edge', id: edgeEl.dataset.id });
+    if (!panelOpen('right')) setPanel('right', true);
     return;
   } else {
     drag = { mode: 'pan', sx: ev.clientX, sy: ev.clientY, vx: view.x, vy: view.y, moved: false };
@@ -1385,7 +1430,10 @@ canvas.addEventListener('pointermove', (ev) => {
 canvas.addEventListener('pointerup', (ev) => {
   if (!drag) return;
   if (drag.mode === 'pan' && !drag.moved) select(null);
-  if (drag.mode === 'node') { drag.el.classList.remove('dragging'); if (drag.moved) save(); }
+  if (drag.mode === 'node') {
+    drag.el.classList.remove('dragging');
+    if (drag.moved) save(); else if (!panelOpen('right')) setPanel('right', true);
+  }
   if (drag.mode === 'connect') {
     tempEdge = null;
     const target = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.node');
@@ -2020,6 +2068,10 @@ $('#btnToggleLog').onclick = () => {
 $('#zoomIn').onclick = () => { zoomAt(1.2); renderEdges(); };
 $('#zoomOut').onclick = () => { zoomAt(1 / 1.2); renderEdges(); };
 $('#zoomFit').onclick = fitView;
+$('#toggleLeft').onclick = () => setPanel('left', !panelOpen('left'));
+$('#toggleRight').onclick = () => setPanel('right', !panelOpen('right'));
+$('.palette').addEventListener('click', (ev) => { if (!panelOpen('left')) { ev.stopPropagation(); setPanel('left', true); } }, true);
+$('#inspector').addEventListener('click', (ev) => { if (!panelOpen('right')) { ev.stopPropagation(); setPanel('right', true); } }, true);
 $('#paletteSearch').addEventListener('input', (ev) => renderPalette(ev.target.value));
 window.addEventListener('resize', () => (KIOSK ? fitView() : renderEdges()));
 
@@ -2038,6 +2090,7 @@ function applyMode() {
   document.body.classList.toggle('kiosk', KIOSK);
   $('#wfName').readOnly = KIOSK;
   $('#btnRun').textContent = KIOSK ? '▶ Run this workflow' : '▶ Run simulation';
+  $('#inspector').dataset.label = KIOSK ? 'What’s happening · Step settings' : 'Settings';
   renderPalette($('#paletteSearch').value);
   selection = null;
   if (!wf) return;
@@ -2059,6 +2112,8 @@ async function showWelcome() {
   story = [];
   panelTab = 'story';
   scenario = 'fraud';
+  setPanel('left', true);
+  setPanel('right', true);
   setWorkflow(buildTemplate('fraud'));
   $('#welcome').hidden = false;
 }
