@@ -335,6 +335,109 @@ button, input, select, textarea { font: inherit; color: inherit; }
 @media (prefers-reduced-motion: reduce) {
   .node, .edge .edge-line { animation: none !important; transition: none !important; }
 }
+
+/* ---------- Kiosk (public demo) mode ----------
+   Default mode. Sized from the viewport (vw / % / em) so it fills any screen without scrolling;
+   the workflow itself is re-fitted to the canvas on every resize. */
+.kiosk-only { display: none !important; }
+body.kiosk .studio-only { display: none !important; }
+body.kiosk .kiosk-only { display: revert !important; }
+body.kiosk { font-size: clamp(13px, 0.95vw + 2px, 19px); }
+body.kiosk .topbar { min-height: 7vh; gap: 2%; padding-inline: 1.5%; }
+body.kiosk .brand { font-size: 1.15em; }
+body.kiosk .wf-name { pointer-events: none; color: var(--muted); max-width: 40%; }
+body.kiosk .layout { grid-template-columns: minmax(0, 1fr) clamp(300px, 30%, 560px); }
+body.kiosk .palette, body.kiosk .run-panel, body.kiosk .canvas-controls { display: none; }
+body.kiosk .node { cursor: pointer; }
+body.kiosk .port { pointer-events: none; }
+body.kiosk .legend { font-size: 0.85em; }
+body.kiosk .btn { padding: 0.5em 1.1em; }
+
+.sim-badge {
+  font-size: 0.8em; padding: 0.25em 0.8em; border-radius: 999px; white-space: nowrap;
+  border: 1px solid var(--warn); color: var(--warn); background: rgba(251,191,36,.08);
+}
+
+/* Story panel (replaces the inspector in kiosk mode) */
+.story { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.story-head h2 { font-size: 1.3em; margin: 0 0 0.3em; }
+.story-head p { margin: 0 0 0.8em; color: var(--muted); }
+.story-key { display: flex; flex-wrap: wrap; gap: 0.4em 1em; font-size: 0.8em; color: var(--muted); margin-bottom: 0.8em; }
+.story-key i { display: inline-block; width: 0.7em; height: 0.7em; border-radius: 50%; margin-right: 0.35em; background: var(--c); }
+.about {
+  background: var(--panel-2); border: 1px solid var(--border); border-left: 4px solid var(--c);
+  border-radius: 8px; padding: 0.7em 0.9em; margin-bottom: 0.8em;
+}
+.about b { display: block; margin-bottom: 0.2em; }
+.about span { color: var(--muted); font-size: 0.92em; }
+.beats { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; min-height: 0; }
+.beat {
+  display: grid; grid-template-columns: 2em 1fr; gap: 0.6em; padding: 0.6em 0.4em;
+  border-left: 3px solid var(--c); margin-bottom: 0.45em; background: var(--panel-2); border-radius: 0 8px 8px 0;
+  animation: beat-in .35s ease-out; --c: var(--control);
+}
+.beat .ic { font-size: 1.25em; text-align: center; }
+.beat .bt { font-weight: 600; }
+.beat .bx { color: #c4cad6; font-size: 0.93em; margin-top: 0.15em; }
+.beat ul { margin: 0.3em 0 0; padding-left: 1.1em; color: #c4cad6; font-size: 0.9em; }
+.beat.warn { --c: var(--warn); }
+.beat.ok { --c: var(--ok); }
+.beat.you { background: rgba(251,191,36,.1); }
+@keyframes beat-in { from { opacity: 0; transform: translateY(6px); } }
+.story-empty { color: var(--muted); text-align: center; padding: 2em 0.5em; }
+.story-foot { padding-top: 0.6em; font-size: 0.78em; color: var(--muted); border-top: 1px solid var(--border); margin-top: 0.4em; }
+
+/* Welcome + outcome overlays */
+.overlay-card {
+  width: min(90%, 62em); max-height: 92vh; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--border); border-top: 4px solid var(--accent);
+  border-radius: 14px; padding: 3% 3.5%; box-shadow: 0 20px 60px rgba(0,0,0,.6); text-align: center;
+}
+.overlay-card h1 { font-size: 2em; margin: 0.2em 0 0.4em; text-wrap: balance; }
+.overlay-card h2 { font-size: 1.6em; margin: 0.2em 0 0.4em; text-wrap: balance; }
+.overlay-card .lead { font-size: 1.1em; color: #c4cad6; max-width: 46em; margin: 0 auto 1.4em; text-wrap: pretty; }
+.overlay-card .big-mark { font-size: 2.6em; color: var(--accent); }
+.scenarios { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3%; margin-bottom: 1.4em; }
+.scenario {
+  display: flex; flex-direction: column; gap: 0.4em; align-items: flex-start; text-align: left;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 12px; padding: 1.2em 1.3em;
+  cursor: pointer; transition: border-color .15s, transform .15s;
+}
+.scenario:hover { border-color: var(--accent); transform: translateY(-2px); }
+.scenario .ic { font-size: 2em; }
+.scenario b { font-size: 1.2em; }
+.scenario span { color: var(--muted); }
+.scenario .go { margin-top: auto; padding-top: 0.6em; color: var(--accent); font-weight: 600; }
+.fine { font-size: 0.85em; color: var(--muted); margin: 0; }
+.result-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(9em, 1fr)); gap: 0.8em; margin: 1.2em 0; }
+.result-stats .stat { text-align: left; }
+.result-stats .stat b { font-size: 1.6em; }
+.verdict-line { font-size: 1.1em; margin: 0 0 0.4em; }
+.report-box { text-align: left; margin: 0 0 1.2em; }
+.report-box pre { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.8em; font-size: 0.85em; max-height: 30vh; overflow: auto; }
+.overlay-actions { display: flex; gap: 0.8em; justify-content: center; margin-bottom: 1em; }
+.overlay-actions .btn { font-size: 1.05em; padding: 0.6em 1.4em; }
+
+/* Human decision in kiosk mode */
+body.kiosk .modal-card { width: min(90%, 46em); font-size: 1em; }
+body.kiosk .kv { grid-template-columns: 38% 1fr; font-size: 0.95em; }
+.callout {
+  border: 1px solid var(--agent); background: rgba(167,139,250,.1); border-radius: 8px;
+  padding: 0.7em 0.9em; margin-bottom: 0.9em;
+}
+.callout b { color: var(--agent); }
+.reasons { margin: 0.4em 0 0.6em; }
+.reasons > span { display: block; font-size: 0.85em; color: var(--muted); margin-bottom: 0.4em; }
+.reasons .chip { font-size: 0.9em; padding: 0.35em 0.8em; margin: 0 0.3em 0.4em 0; display: inline-block; }
+.reasons .chip.on { border-color: var(--accent); background: rgba(109,139,255,.18); }
+body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
+
+@media (max-aspect-ratio: 1/1) {
+  /* portrait screens: story panel goes under the canvas */
+  body.kiosk .layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: 58% 42%; }
+  body.kiosk .inspector { border-left: 0; border-top: 1px solid var(--border); }
+  .scenarios { grid-template-columns: minmax(0, 1fr); }
+}
   </style>
 </head>
 <body>
@@ -346,17 +449,19 @@ button, input, select, textarea { font: inherit; color: inherit; }
     </div>
     <input id="wfName" class="wf-name" spellcheck="false" aria-label="Workflow name">
     <div class="toolbar">
-      <select id="templateSelect" aria-label="Load template">
+      <span class="sim-badge kiosk-only" title="Fictional data. The agents are scripted for this demo.">Simulation · fictional data</span>
+      <button id="btnRestart" class="btn kiosk-only">↺ Start over</button>
+      <select id="templateSelect" class="studio-only" aria-label="Load template">
         <option value="">Templates…</option>
         <option value="fraud">Card fraud investigation</option>
         <option value="ato">Phishing / account takeover</option>
         <option value="blank">Blank workflow</option>
       </select>
-      <button id="btnImport" class="btn">Import</button>
-      <button id="btnExport" class="btn">Export JSON</button>
-      <button id="btnValidate" class="btn">Validate</button>
-      <button id="btnRun" class="btn primary">▶ Run simulation</button>
-      <button id="btnStop" class="btn danger" hidden>■ Stop</button>
+      <button id="btnImport" class="btn studio-only">Import</button>
+      <button id="btnExport" class="btn studio-only">Export JSON</button>
+      <button id="btnValidate" class="btn studio-only">Validate</button>
+      <button id="btnRun" class="btn primary studio-only">▶ Run simulation</button>
+      <button id="btnStop" class="btn danger studio-only" hidden>■ Stop</button>
     </div>
   </header>
 
@@ -416,11 +521,44 @@ button, input, select, textarea { font: inherit; color: inherit; }
         </div>
       </div>
       <div id="modalBody" class="modal-body"></div>
-      <label class="field">
+      <label class="field studio-only">
         <span>Analyst notes <em id="notesReq"></em></span>
         <textarea id="modalNotes" rows="3" placeholder="Rationale, extra context, follow-ups…"></textarea>
       </label>
+      <div id="modalReasons" class="reasons kiosk-only"></div>
       <div id="modalActions" class="modal-actions"></div>
+    </div>
+  </div>
+
+  <div id="welcome" class="modal" hidden>
+    <div class="overlay-card" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle">
+      <div class="big-mark">◈</div>
+      <h1 id="welcomeTitle">How AI agents help investigate fraud</h1>
+      <p class="lead">Pick a case. A team of AI agents gathers the evidence and recommends what to do. Then <b>you</b> make the final call as the fraud analyst.</p>
+      <div class="scenarios">
+        <button class="scenario" data-scenario="fraud">
+          <span class="ic">💳</span><b>Suspicious card payment</b>
+          <span>A $4,500 payment from a customer who normally spends about $120 a month.</span>
+          <span class="go">Start investigation ▶</span>
+        </button>
+        <button class="scenario" data-scenario="ato">
+          <span class="ic">🎣</span><b>Phishing &amp; account takeover</b>
+          <span>A customer reports a fake “your password expires today” email. Did the criminals get in?</span>
+          <span class="go">Start investigation ▶</span>
+        </button>
+      </div>
+      <p class="fine">Simulated demo: every customer, payment and data source is fictional, and the AI agents are scripted for this demo. Nothing you do here is stored.</p>
+    </div>
+  </div>
+
+  <div id="outcome" class="modal" hidden>
+    <div class="overlay-card" role="dialog" aria-modal="true" aria-labelledby="outcomeTitle">
+      <div id="outcomeBody"></div>
+      <div class="overlay-actions">
+        <button id="btnOther" class="btn primary"></button>
+        <button id="btnAgain" class="btn">↺ Start over</button>
+      </div>
+      <p class="fine">Simulated demo with fictional data. In a real deployment the agents run on a language model and read live systems; a person still signs off on every action.</p>
     </div>
   </div>
 
@@ -606,6 +744,46 @@ const FIELDS = {
 
 const fieldsFor = (type) => FIELDS[type] || FIELDS[NODE_TYPES[type].category];
 
+// Plain-language descriptions for the public (kiosk) view.
+const PLAIN = {
+  trigger: 'An alert opens a new case',
+  decision: 'Picks the next path based on the evidence so far',
+  end: 'The final outcome of the case',
+  ds_transactions: "The customer's past payments",
+  ds_customer: 'Who the customer is and their history with the bank',
+  ds_ipgeo: 'Where the connection came from, and whether it hides behind a VPN',
+  ds_device: 'Which phone or computer was used, and who else uses it',
+  ds_siem: 'Security logs: sign-ins, failed logins and password resets',
+  ds_threatintel: 'Known scams and criminal infrastructure',
+  ds_documents: 'Files and emails attached to the case',
+  ds_custom: 'Another data source',
+  agent_triage: 'Scores how risky the alert is',
+  agent_enrichment: 'Gathers context and spots what looks unusual',
+  agent_correlation: 'Connects this case to other cases and known scams',
+  agent_investigator: 'Weighs all the evidence and recommends a verdict',
+  agent_summarizer: 'Writes up the case report',
+  agent_custom: 'A custom AI agent',
+  human_review: 'A fraud analyst checks what the AI found',
+  human_approval: 'A person approves or rejects the AI recommendation',
+  human_escalation: 'A senior investigator takes over the case',
+};
+const ROLE_OF = {
+  control: 'Workflow step',
+  data: 'Data source: the AI can look things up here',
+  agent: 'AI agent: works automatically',
+  human: 'Human: the AI never makes this call alone',
+};
+const LABELS = {
+  case_id: 'Case', user_id: 'Customer', amount: 'Amount', sender_domain: 'Email sent from', risk_score: 'Risk score',
+  severity: 'Severity', verdict: 'AI verdict', confidence: 'AI confidence', recommended_action: 'AI recommends',
+  campaign: 'Scam campaign', linked_cases: 'Linked cases', compromised: 'Account taken over?', exposure: 'Money at risk',
+  needs_human_review: 'Flagged for review',
+};
+const REASONS = ['The evidence is convincing', 'It matches a known scam', 'Customer confirmed it wasn’t them', 'I want more evidence', 'Customer says it was genuine'];
+const SCENARIO_NAMES = { fraud: 'Suspicious card payment', ato: 'Phishing & account takeover' };
+const money = (v) => '$' + Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 });
+const plainOutcome = (o) => ({ 'File SAR': 'Block card & report to the authorities', 'Refer to compliance': 'Passed to the compliance team', 'Close – no action': 'Closed: no fraud found', 'Contain & reset credentials': 'Account secured & password reset' }[o] || o);
+
 /* =====================================================================
    Templates
    ===================================================================== */
@@ -681,6 +859,12 @@ function buildTemplate(name) {
    ===================================================================== */
 
 const STORAGE_KEY = 'iws.workflow.v1';
+// Kiosk mode is the default public demo: locked canvas, guided story, auto-reset.
+// Open with ?studio, or press Ctrl+Shift+E, for the full editor.
+let KIOSK = !new URLSearchParams(location.search).has('studio');
+let story = []; // kiosk narration beats
+let scenario = 'fraud';
+let pendingHuman = null; // resolver of the open human-decision modal
 let wf;
 let view = { x: 40, y: 40, scale: 1 };
 let selection = null; // { kind: 'node' | 'edge', id }
@@ -705,6 +889,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const clone = (o) => JSON.parse(JSON.stringify(o));
 
 function save() {
+  if (KIOSK) return; // public visitors never change what the next visitor sees
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(wf)); } catch { /* storage unavailable */ }
 }
 
@@ -742,6 +927,7 @@ function renderAll() {
 
 function nodeSummary(node) {
   const c = node.config;
+  if (KIOSK) return node.type === 'end' ? plainOutcome(c.outcome) : PLAIN[node.type];
   switch (catOf(node)) {
     case 'data': return `${c.connector} · ${c.fields || 'no fields'}`;
     case 'agent': return `${c.model} · ${c.autonomy}`;
@@ -945,6 +1131,7 @@ function duplicateNode(id) {
 
 function renderInspector() {
   const el = $('#inspector');
+  if (KIOSK) return renderStory(el);
   if (selection?.kind === 'node' && getNode(selection.id)) return renderNodeInspector(el, getNode(selection.id));
   if (selection?.kind === 'edge') {
     const e = wf.edges.find((x) => x.id === selection.id);
@@ -976,6 +1163,36 @@ function renderWorkflowInspector(el) {
       </ul>
     </div>`;
   $('#wfDesc').addEventListener('input', (ev) => { wf.description = ev.target.value; save(); });
+}
+
+/* ---------- Kiosk story panel ---------- */
+
+function renderStory(el) {
+  const sel = selection?.kind === 'node' && getNode(selection.id);
+  const about = sel ? `<div class="about" style="--c:var(--${catOf(sel)})"><b>${NODE_TYPES[sel.type].icon} ${esc(sel.label)}</b>
+    <span>${esc(PLAIN[sel.type])}. ${esc(ROLE_OF[catOf(sel)])}.</span></div>` : '';
+  const beats = story.map((b) => `<li class="beat ${b.kind || ''}"${b.cat ? ` style="--c:var(--${b.cat})"` : ''}>
+      <span class="ic">${b.icon}</span>
+      <div><div class="bt">${esc(b.title)}</div>${b.text ? `<div class="bx">${esc(b.text)}</div>` : ''}
+      ${b.items?.length ? `<ul>${b.items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>` : ''}</div></li>`).join('');
+  el.innerHTML = `<div class="story">
+    <div class="story-head"><h2>What’s happening</h2><p>AI agents investigate the case step by step. A person makes the final call.</p></div>
+    <div class="story-key">
+      <span style="--c:var(--data)"><i></i>Data source</span><span style="--c:var(--agent)"><i></i>AI agent</span>
+      <span style="--c:var(--human)"><i></i>Human (you)</span><span style="--c:var(--control)"><i></i>Workflow step</span>
+    </div>
+    ${about}
+    <ol class="beats" id="beats">${beats || '<li class="story-empty">Pick a case to start the investigation.<br>Click any step on the map to see what it does.</li>'}</ol>
+    <div class="story-foot">Simulation · fictional data · personal details are masked before the AI sees them.</div>
+  </div>`;
+  const list = $('#beats', el);
+  list.scrollTop = list.scrollHeight;
+}
+
+function narrate(beat) {
+  story.push(beat);
+  lastActivity = Date.now();
+  if (KIOSK) renderInspector();
 }
 
 function renderEdgeInspector(el, e) {
@@ -1066,6 +1283,11 @@ canvas.addEventListener('pointerdown', (ev) => {
   const nodeEl = ev.target.closest('.node');
   const edgeEl = ev.target.closest('.edge');
 
+  if (KIOSK) { // read-only: clicking a step explains it, nothing moves or changes
+    select(nodeEl ? { kind: 'node', id: nodeEl.dataset.id } : null);
+    return;
+  }
+
   if (port && nodeEl) {
     const from = nodeEl.dataset.id;
     const a = portPos(from, port.dataset.port, 'out');
@@ -1128,6 +1350,7 @@ canvas.addEventListener('pointerup', (ev) => {
 
 canvas.addEventListener('wheel', (ev) => {
   ev.preventDefault();
+  if (KIOSK) return;
   const r = canvas.getBoundingClientRect();
   zoomAt(ev.deltaY < 0 ? 1.1 : 1 / 1.1, ev.clientX - r.left, ev.clientY - r.top);
 }, { passive: false });
@@ -1157,6 +1380,8 @@ canvas.addEventListener('drop', (ev) => {
 
 document.addEventListener('keydown', (ev) => {
   const typing = ev.target.matches('input, textarea, select');
+  if (ev.ctrlKey && ev.shiftKey && ev.key.toLowerCase() === 'e') { ev.preventDefault(); return toggleMode(); }
+  if (KIOSK) return;
   if (!typing && (ev.key === 'Delete' || ev.key === 'Backspace')) { ev.preventDefault(); deleteSelection(); }
   if (ev.key === 'Escape' && !$('#dialog').hidden) return closeDialog();
   if (!typing && ev.key === 'Escape') select(null);
@@ -1290,7 +1515,7 @@ function simulateAgent(node, ctx, data) {
   const role = node.config.role;
   const all = Object.values(data);
   const pick = (key) => all.find((d) => d && key in d);
-  let out = {}, msg;
+  let out = {}, msg, story;
 
   switch (role) {
     case 'triage': {
@@ -1306,6 +1531,7 @@ function simulateAgent(node, ctx, data) {
       score = clamp(Math.round(score + rnd(-4, 4)), 0, 100);
       out = { risk_score: score, severity: score >= 70 ? 'high' : score >= 40 ? 'medium' : 'low' };
       msg = `Risk ${score}/100 (${out.severity}). Drivers: ${drivers.join(', ') || 'none notable'}.`;
+      story = { title: `Risk score: ${score} out of 100 (${out.severity})`, items: drivers.map((d) => d.replace(/^amount (.*)$/, (m, a) => `${money(a)} payment`)) };
       break;
     }
     case 'enrichment': {
@@ -1319,6 +1545,7 @@ function simulateAgent(node, ctx, data) {
       if (siem?.failed_logins_7d > 5) anomalies.push(`${siem.failed_logins_7d} failed logins in 7 days`);
       out = { anomalies, risk_score: clamp((ctx.risk_score ?? 50) + anomalies.length * 5, 0, 100) };
       msg = anomalies.length ? `${anomalies.length} anomalies found; risk now ${out.risk_score}.` : 'No anomalies found.';
+      story = anomalies.length ? { title: `Found ${anomalies.length} red flags`, text: `Risk score raised to ${out.risk_score}.`, items: anomalies } : { title: 'Nothing unusual found' };
       break;
     }
     case 'correlation': {
@@ -1332,6 +1559,14 @@ function simulateAgent(node, ctx, data) {
       }
       msg = `${linked} linked case(s)${ti ? `, attributed to campaign ${ti.campaign}` : ''}${out.compromised ? '; signs of account compromise (impossible travel)' : ''}`
         + (out.suspicious_transactions?.length ? `; ${out.suspicious_transactions.length} transactions to new payees after the suspicious logins, exposure ${out.exposure.toFixed(2)}.` : '.');
+      story = {
+        title: ti ? `Linked to the “${ti.campaign}” scam campaign` : `${linked} related case(s) found`,
+        items: [
+          `${linked} other case(s) look connected`,
+          out.compromised ? 'Signs the account was taken over: logins from places too far apart to travel between' : null,
+          out.suspicious_transactions?.length ? `${out.suspicious_transactions.length} payments to new payees after those logins: ${money(out.exposure)} at risk` : null,
+        ].filter(Boolean),
+      };
       break;
     }
     case 'investigator': {
@@ -1344,6 +1579,10 @@ function simulateAgent(node, ctx, data) {
         : `Activity is consistent with the subject's baseline (risk ${risk}, ${signals} anomalies).`;
       out = { verdict: fraud ? 'FRAUD' : 'LEGITIMATE', confidence, rationale, recommended_action: fraud ? 'Block card, notify customer, file SAR' : 'Release transaction' };
       msg = `Verdict [${out.verdict}] at ${Math.round(confidence * 100)}% confidence. Recommends: ${out.recommended_action}.`;
+      story = {
+        title: `Verdict: ${fraud ? 'likely fraud' : 'looks genuine'} (${Math.round(confidence * 100)}% confident)`,
+        text: fraud ? `Recommends: block the card, tell the customer and report it to the authorities. It's sending this to a person to approve.` : 'Recommends releasing the payment.',
+      };
       break;
     }
     case 'summarizer': {
@@ -1359,6 +1598,7 @@ function simulateAgent(node, ctx, data) {
       ].filter(Boolean);
       out = { report: lines.join('\n') };
       msg = 'Case report drafted.';
+      story = { title: 'Case report written', text: 'Everything the agents found, plus the human decisions, in one report.' };
       break;
     }
     default:
@@ -1367,43 +1607,74 @@ function simulateAgent(node, ctx, data) {
   }
 
   const confidence = out.confidence ?? round2(rnd(0.7, 0.97));
-  return { out, msg, confidence };
+  return { out, msg, confidence, story: story || { title: msg } };
+}
+
+function kioskValue(k, v) {
+  if (k === 'confidence') return Math.round(v * 100) + '%';
+  if (k === 'amount' || k === 'exposure') return money(v);
+  if (k === 'risk_score') return `${v} / 100`;
+  if (typeof v === 'boolean') return v ? 'Yes' : 'No';
+  if (k === 'verdict') return v === 'FRAUD' ? 'Likely fraud' : 'Looks genuine';
+  return Array.isArray(v) ? v.join(', ') : v;
 }
 
 function askHuman(node, ctx) {
   return new Promise((resolve) => {
     const t = NODE_TYPES[node.type];
     const c = node.config;
-    const show = ['case_id', 'user_id', 'amount', 'sender_domain', 'risk_score', 'severity', 'verdict', 'confidence', 'recommended_action', 'campaign', 'linked_cases', 'compromised', 'exposure', 'needs_human_review'];
-    const rows = show.filter((k) => ctx[k] != null).map((k) => `<dt>${esc(k)}</dt><dd>${esc(Array.isArray(ctx[k]) ? ctx[k].join(', ') : ctx[k])}</dd>`);
-    if (ctx.anomalies?.length) rows.push(`<dt>anomalies</dt><dd>${ctx.anomalies.map(esc).join('<br>')}</dd>`);
-    if (ctx.suspicious_transactions?.length) rows.push(`<dt>suspicious transactions</dt><dd>${ctx.suspicious_transactions.map(esc).join('<br>')}</dd>`);
-    if (ctx.rationale) rows.push(`<dt>agent rationale</dt><dd>${esc(ctx.rationale)}</dd>`);
+    const modal = $('#modal');
+    const finish = (answer) => { pendingHuman = null; modal.hidden = true; resolve(answer); };
+    pendingHuman = finish;
+
+    const show = ['case_id', 'user_id', 'amount', 'sender_domain', 'risk_score', 'severity', 'verdict', 'confidence', 'recommended_action', 'campaign', 'linked_cases', 'compromised', 'exposure', 'needs_human_review']
+      .filter((k) => ctx[k] != null && !(KIOSK && ['verdict', 'confidence', 'recommended_action', 'needs_human_review'].includes(k)));
+    const label = (k) => (KIOSK ? LABELS[k] || k : k);
+    const value = (k, v) => (KIOSK ? kioskValue(k, v) : Array.isArray(v) ? v.join(', ') : v);
+    const rows = show.map((k) => `<dt>${esc(label(k))}</dt><dd>${esc(value(k, ctx[k]))}</dd>`);
+    if (ctx.anomalies?.length) rows.push(`<dt>${KIOSK ? 'Red flags' : 'anomalies'}</dt><dd>${ctx.anomalies.map(esc).join('<br>')}</dd>`);
+    if (ctx.suspicious_transactions?.length) rows.push(`<dt>${KIOSK ? 'Suspicious payments' : 'suspicious transactions'}</dt><dd>${ctx.suspicious_transactions.map(esc).join('<br>')}</dd>`);
+    if (ctx.rationale && !KIOSK) rows.push(`<dt>agent rationale</dt><dd>${esc(ctx.rationale)}</dd>`);
+
+    const callout = KIOSK && ctx.verdict
+      ? `<div class="callout"><b>AI recommendation:</b> ${esc(ctx.verdict === 'FRAUD' ? 'block the card, tell the customer and report it to the authorities' : 'release the payment')}
+         <span class="muted">(${Math.round((ctx.confidence || 0) * 100)}% confident)</span><br><span class="muted">${esc(ctx.rationale || '')}</span></div>`
+      : '';
 
     $('#modalIcon').textContent = t.icon;
-    $('#modalTitle').textContent = node.label;
-    $('#modalMeta').textContent = `${c.role} · ${c.assignee} · SLA ${c.sla}`;
-    $('#modalBody').innerHTML = `<div class="instructions">${esc(c.instructions)}</div><dl class="kv">${rows.join('')}</dl>`;
+    $('#modalTitle').textContent = KIOSK ? `Your decision: ${node.label}` : node.label;
+    $('#modalMeta').textContent = KIOSK ? `You are the ${c.role}. The AI has done the legwork; the decision is yours.` : `${c.role} · ${c.assignee} · SLA ${c.sla}`;
+    $('#modalBody').innerHTML = `${callout}<div class="instructions">${esc(c.instructions)}</div><dl class="kv">${rows.join('')}</dl>`;
     $('#notesReq').textContent = c.requireNotes ? '(required)' : '(optional)';
     const notes = $('#modalNotes');
     notes.value = '';
 
-    const actions = t.outputs.length > 1
-      ? t.outputs.map((p, i) => `<button class="btn ${i === 0 ? 'approve' : 'reject'}" data-port="${p}">${{ approved: 'Approve', rejected: 'Reject' }[p] || p[0].toUpperCase() + p.slice(1)}</button>`)
-      : [`<button class="btn approve" data-port="${t.outputs[0]}">Complete review</button>`];
-    $('#modalActions').innerHTML = `<button class="btn" data-abort>Abort run</button><span class="spacer"></span>${actions.join('')}`;
+    // Kiosk: preset reasons instead of free text, so nothing a visitor types ends up on screen
+    let reason = '';
+    $('#modalReasons').innerHTML = `<span>Why? (optional)</span>${REASONS.map((r) => `<button type="button" class="chip">${esc(r)}</button>`).join('')}`;
+    $('#modalReasons').onclick = (ev) => {
+      const chip = ev.target.closest('.chip');
+      if (!chip) return;
+      const on = !chip.classList.contains('on');
+      $('#modalReasons').querySelectorAll('.chip').forEach((x) => x.classList.remove('on'));
+      chip.classList.toggle('on', on);
+      reason = on ? chip.textContent : '';
+    };
 
-    const modal = $('#modal');
+    const names = KIOSK ? { approved: '✓ Approve', rejected: '✗ Reject: investigate further', out: '✓ Confirm & continue' } : { approved: 'Approve', rejected: 'Reject', out: 'Complete review' };
+    const actions = t.outputs.map((p, i) => `<button class="btn ${i === 0 ? 'approve' : 'reject'}" data-port="${p}">${names[p] || p[0].toUpperCase() + p.slice(1)}</button>`);
+    $('#modalActions').innerHTML = `${KIOSK ? '' : '<button class="btn" data-abort>Abort run</button>'}<span class="spacer"></span>${actions.join('')}`;
+
     modal.hidden = false;
-    setTimeout(() => notes.focus(), 50);
+    if (!KIOSK) setTimeout(() => notes.focus(), 50);
 
     $('#modalActions').onclick = (ev) => {
       const b = ev.target.closest('button');
       if (!b) return;
-      if (b.hasAttribute('data-abort')) { modal.hidden = true; return resolve(null); }
+      if (b.hasAttribute('data-abort')) return finish(null);
+      if (KIOSK) return finish({ port: b.dataset.port, notes: reason });
       if (c.requireNotes && !notes.value.trim()) { notes.focus(); return toast('Notes are required for this step.', true); }
-      modal.hidden = true;
-      resolve({ port: b.dataset.port, notes: notes.value.trim() });
+      finish({ port: b.dataset.port, notes: notes.value.trim() });
     };
   });
 }
@@ -1414,6 +1685,10 @@ async function executeNode(node, ctx, speed) {
 
   if (node.type === 'trigger') {
     log({ nodeId: node.id, msg: `Case ${ctx.case_id} opened from “${c.source}”.`, details: JSON.parse(c.payload || '{}') });
+    narrate({ icon: '⚡', cat: 'control', title: `Case ${ctx.case_id} opened`,
+      text: ctx.sender_domain
+        ? `Customer ${ctx.user_id} reported an email from “${ctx.sender_domain}”${ctx.subject ? `: “${ctx.subject}”` : ''}.`
+        : ctx.amount ? `A ${money(ctx.amount)} payment by customer ${ctx.user_id} was flagged as unusual.` : `New alert from ${c.source}.` });
     return ['out'];
   }
 
@@ -1424,12 +1699,15 @@ async function executeNode(node, ctx, speed) {
       throw new Error(`Condition failed on “${node.label}”: ${err.message}`);
     }
     log({ kind: 'info', nodeId: node.id, msg: `${c.condition} → ${result ? 'yes' : 'no'}` });
+    const next = wf.edges.find((e) => e.from === node.id && e.fromPort === (result ? 'yes' : 'no'));
+    narrate({ icon: '◆', cat: 'control', title: `${node.label} ${result ? 'Yes' : 'No'}`, text: next ? `Next: ${getNode(next.to).label}` : '' });
     return [result ? 'yes' : 'no'];
   }
 
   if (node.type === 'end') {
     ctx.outcome = c.outcome;
     log({ kind: 'success', nodeId: node.id, msg: `Disposition: ${c.outcome}${c.notify ? ` · notified ${c.notify}` : ''}.` });
+    narrate({ icon: '🏁', cat: 'ok', kind: 'ok', title: `Outcome: ${plainOutcome(c.outcome)}` });
     return [];
   }
 
@@ -1437,6 +1715,7 @@ async function executeNode(node, ctx, speed) {
     const feeds = wf.edges.filter((e) => e.to === node.id && isDataNode(e.from));
     const data = {};
     for (const e of feeds) {
+      if (run.abort) return [];
       const ds = getNode(e.from);
       edgeStatus[e.id] = 'fired';
       setNodeStatus(ds.id, 'running');
@@ -1446,14 +1725,18 @@ async function executeNode(node, ctx, speed) {
       data[ds.label] = rec;
       setNodeStatus(ds.id, 'done');
       log({ kind: 'info', nodeId: ds.id, msg: `Queried by ${node.label} via ${ds.config.connector}${ds.config.pii ? ' (PII masked)' : ''}.`, details: rec });
+      narrate({ icon: NODE_TYPES[ds.type].icon, cat: 'data', title: `${node.label} checks: ${ds.label}`, text: PLAIN[ds.type] + (ds.config.pii ? '. Personal details are masked first.' : '.') });
     }
+    if (run.abort) return [];
     await sleep(speed);
-    const { out, msg, confidence } = simulateAgent(node, ctx, data);
+    const { out, msg, confidence, story: beat } = simulateAgent(node, ctx, data);
     Object.assign(ctx, out);
     log({ kind: 'info', nodeId: node.id, msg: `[${c.model}] ${msg}`, details: out });
+    narrate({ icon: NODE_TYPES[node.type].icon, cat: 'agent', ...beat, title: `${node.label}: ${beat.title}` });
     if (confidence < Number(c.confidenceThreshold)) {
       ctx.needs_human_review = true;
       log({ kind: 'warn', nodeId: node.id, msg: `Confidence ${Math.round(confidence * 100)}% is below the ${Math.round(c.confidenceThreshold * 100)}% threshold — flagged for human review.` });
+      narrate({ icon: '⚠', kind: 'warn', title: 'Not sure enough', text: `The agent is only ${Math.round(confidence * 100)}% confident, so it flags the case for a person to check.` });
     }
     if (c.autonomy === 'act' && out.verdict === 'FRAUD') {
       ctx.actions_taken = [...(ctx.actions_taken || []), 'Card temporarily frozen'];
@@ -1466,8 +1749,10 @@ async function executeNode(node, ctx, speed) {
     setNodeStatus(node.id, 'waiting');
     setRunStatus(`Waiting on ${node.config.role}`, 'waiting');
     log({ kind: 'warn', nodeId: node.id, msg: `Assigned to ${c.assignee} (${c.role}), SLA ${c.sla}. Waiting for analyst…` });
+    narrate({ icon: '✋', cat: 'human', kind: 'you', title: `Your turn: ${node.label}`, text: `You are the ${c.role}. The AI only recommends; a person decides.` });
     const answer = await askHuman(node, ctx);
     if (!answer) { run.abort = true; return []; }
+    narrate({ icon: NODE_TYPES[node.type].icon, cat: 'human', title: `You chose: ${{ approved: 'Approve', rejected: 'Reject', out: 'Confirm' }[answer.port] || answer.port}`, text: answer.notes || '' });
     setRunStatus('Running', 'running');
     ctx.audit.push({ step: node.label, by: c.role, decision: answer.port, notes: answer.notes, at: new Date().toISOString() });
     log({ kind: 'success', nodeId: node.id, msg: `${c.role} ${answer.port === 'out' ? 'completed review' : '→ ' + answer.port}${answer.notes ? ` — “${answer.notes}”` : ''}` });
@@ -1495,7 +1780,8 @@ async function runWorkflow() {
   $('#btnStop').hidden = false;
   setRunStatus('Running', 'running');
 
-  const speed = Number($('#speedSelect').value);
+  const speed = KIOSK ? 1100 : Number($('#speedSelect').value);
+  const startedAt = Date.now();
   const ctx = { case_id: 'CASE-' + Math.floor(rnd(10000, 99999)), audit: [] };
   logSection(`Run ${ctx.case_id} — ${wf.name}`);
   issues.forEach((i) => log({ kind: 'warn', nodeId: i.nodeId, msg: i.msg }));
@@ -1550,6 +1836,7 @@ async function runWorkflow() {
     setRunStatus(ctx.outcome ? `Completed — ${ctx.outcome}` : 'Completed', 'ok');
     const { audit, ...rest } = ctx;
     log({ kind: 'success', msg: `Run complete${ctx.outcome ? `: ${ctx.outcome}` : ''}.`, details: { ...rest, audit } });
+    if (KIOSK) setTimeout(() => { if (!run.active && KIOSK) showOutcome(ctx, startedAt); }, 1200);
   }
   run.active = false;
   $('#btnRun').hidden = false;
@@ -1660,7 +1947,7 @@ $('#templateSelect').addEventListener('change', (ev) => {
 $('#wfName').addEventListener('input', (ev) => { wf.name = ev.target.value; save(); });
 $('#btnValidate').onclick = showValidation;
 $('#btnRun').onclick = runWorkflow;
-$('#btnStop').onclick = () => { run.abort = true; $('#modal').hidden = true; };
+$('#btnStop').onclick = () => stopRun();
 $('#btnClearLog').onclick = () => { logEl.innerHTML = '<div class="empty-log">Run log cleared.</div>'; if (!run.active) { resetRunVisuals(); renderNodes(); renderEdges(); setRunStatus('Idle', 'idle'); } };
 $('#btnToggleLog').onclick = () => {
   const p = $('#runPanel');
@@ -1672,7 +1959,98 @@ $('#zoomIn').onclick = () => { zoomAt(1.2); renderEdges(); };
 $('#zoomOut').onclick = () => { zoomAt(1 / 1.2); renderEdges(); };
 $('#zoomFit').onclick = fitView;
 $('#paletteSearch').addEventListener('input', (ev) => renderPalette(ev.target.value));
-window.addEventListener('resize', renderEdges);
+window.addEventListener('resize', () => (KIOSK ? fitView() : renderEdges()));
+
+/* =====================================================================
+   Kiosk mode: welcome, outcome, auto-reset
+   ===================================================================== */
+
+async function stopRun() {
+  if (!run.active) return;
+  run.abort = true;
+  pendingHuman?.(null);
+  while (run.active) await sleep(50);
+}
+
+function applyMode() {
+  document.body.classList.toggle('kiosk', KIOSK);
+  $('#wfName').readOnly = KIOSK;
+  selection = null;
+  if (!wf) return;
+  renderAll();
+  requestAnimationFrame(fitView);
+}
+
+async function toggleMode() {
+  await stopRun();
+  ['#welcome', '#outcome', '#dialog', '#modal'].forEach((id) => { $(id).hidden = true; });
+  KIOSK = !KIOSK;
+  applyMode();
+  if (KIOSK) showWelcome(); else { setWorkflow(load()); toast('Studio mode: full editor. Ctrl+Shift+E returns to the public demo.'); }
+}
+
+async function showWelcome() {
+  await stopRun();
+  ['#outcome', '#dialog', '#modal'].forEach((id) => { $(id).hidden = true; });
+  story = [];
+  scenario = 'fraud';
+  setWorkflow(buildTemplate('fraud'));
+  $('#welcome').hidden = false;
+}
+
+async function startScenario(name) {
+  await stopRun();
+  $('#welcome').hidden = true;
+  $('#outcome').hidden = true;
+  scenario = name;
+  story = [];
+  setWorkflow(buildTemplate(name));
+  await sleep(600); // let visitors see the map before it starts moving
+  runWorkflow();
+}
+
+function showOutcome(ctx, startedAt) {
+  const ran = (cat) => wf.nodes.filter((n) => catOf(n) === cat && nodeStatus[n.id] === 'done').length;
+  const secs = Math.round((Date.now() - startedAt) / 1000);
+  const atRisk = ctx.exposure ?? ctx.amount;
+  const stat = (c, v, l) => `<div class="stat" style="--c:var(--${c})"><b>${esc(v)}</b><span>${esc(l)}</span></div>`;
+  $('#outcomeBody').innerHTML = `
+    <div class="big-mark">🏁</div>
+    <h2 id="outcomeTitle">${esc(plainOutcome(ctx.outcome || 'Case closed'))}</h2>
+    ${ctx.verdict ? `<p class="verdict-line">AI verdict: <b>${ctx.verdict === 'FRAUD' ? 'likely fraud' : 'looks genuine'}</b> (${Math.round((ctx.confidence || 0) * 100)}% confident)${ctx.audit.length ? ` · your decision: <b>${esc(ctx.audit.map((a) => ({ approved: 'approve', rejected: 'reject', out: 'confirm' }[a.decision] || a.decision)).join(', then '))}</b>` : ''}</p>` : ''}
+    <div class="result-stats">
+      ${stat('accent', secs + 's', 'Investigation time')}
+      ${stat('data', ran('data'), 'Data sources checked')}
+      ${stat('agent', ran('agent'), 'AI agents used')}
+      ${stat('human', ctx.audit.length, 'Human decisions')}
+      ${atRisk != null ? stat('warn', money(atRisk), 'Money at risk') : ''}
+    </div>
+    ${ctx.report ? `<details class="report-box"><summary>Read the AI-written case report</summary><pre class="mono">${esc(ctx.report)}</pre></details>` : ''}`;
+  const other = scenario === 'fraud' ? 'ato' : 'fraud';
+  $('#btnOther').textContent = `Try: ${SCENARIO_NAMES[other]} ▶`;
+  $('#btnOther').onclick = () => startScenario(other);
+  $('#outcome').hidden = false;
+}
+
+$('#welcome').addEventListener('click', (ev) => {
+  const card = ev.target.closest('[data-scenario]');
+  if (card) startScenario(card.dataset.scenario);
+});
+$('#btnAgain').onclick = showWelcome;
+$('#btnRestart').onclick = showWelcome;
+
+// Return to the welcome screen when a visitor walks away
+const IDLE_MS = 90_000;
+let lastActivity = Date.now();
+let idleWarned = false;
+['pointermove', 'pointerdown', 'keydown', 'wheel'].forEach((type) =>
+  window.addEventListener(type, () => { lastActivity = Date.now(); idleWarned = false; }, { capture: true, passive: true }));
+setInterval(() => {
+  if (!KIOSK || !$('#welcome').hidden) return;
+  const idle = Date.now() - lastActivity;
+  if (idle > IDLE_MS) { lastActivity = Date.now(); showWelcome(); }
+  else if (idle > IDLE_MS - 15_000 && !idleWarned) { idleWarned = true; toast('Still there? The demo restarts soon. Move the mouse to keep going.'); }
+}, 1000);
 
 /* =====================================================================
    Boot
@@ -1681,7 +2059,8 @@ window.addEventListener('resize', renderEdges);
 renderPalette();
 applyView();
 logEl.innerHTML = '<div class="empty-log">Press <b>▶ Run simulation</b> to walk a sample case through the workflow. Human steps will pause for your decision.</div>';
-setWorkflow(load());
+applyMode();
+if (KIOSK) showWelcome(); else setWorkflow(load());
 window.IWS_READY = true;
   </script>
 </body>
