@@ -346,10 +346,20 @@ body.kiosk { font-size: clamp(13px, 0.95vw + 2px, 19px); }
 body.kiosk .topbar { min-height: 7vh; gap: 2%; padding-inline: 1.5%; }
 body.kiosk .brand { font-size: 1.15em; }
 body.kiosk .wf-name { pointer-events: none; color: var(--muted); max-width: 40%; }
-body.kiosk .layout { grid-template-columns: minmax(0, 1fr) clamp(300px, 30%, 560px); }
-body.kiosk .palette, body.kiosk .run-panel, body.kiosk .canvas-controls { display: none; }
-body.kiosk .node { cursor: pointer; }
-body.kiosk .port { pointer-events: none; }
+body.kiosk .layout { grid-template-columns: clamp(190px, 17%, 300px) minmax(0, 1fr) clamp(300px, 28%, 520px); }
+body.kiosk .run-panel { display: none; }
+body.kiosk .inspector { display: flex; flex-direction: column; min-height: 0; padding-top: 0; }
+@media (max-width: 1500px) { body.kiosk .wf-name { display: none; } }
+.panel-tabs { display: flex; gap: 0.3em; margin: 0 -0.2em 0.9em; padding-top: 0.8em; border-bottom: 1px solid var(--border); }
+.panel-tab {
+  flex: 1; background: none; border: 0; border-bottom: 2px solid transparent; padding: 0.5em 0.4em; cursor: pointer;
+  color: var(--muted); font-weight: 600;
+}
+.panel-tab:hover { color: var(--text); }
+.panel-tab.on { color: var(--text); border-bottom-color: var(--accent); }
+.panel-body { flex: 1; min-height: 0; overflow-y: auto; }
+.panel-body.story-body { overflow: hidden; display: flex; flex-direction: column; }
+.issue-list { text-align: left; margin: 0; padding-left: 1.2em; line-height: 1.6; }
 body.kiosk .legend { font-size: 0.85em; }
 body.kiosk .btn { padding: 0.5em 1.1em; }
 
@@ -434,7 +444,8 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
 
 @media (max-aspect-ratio: 1/1) {
   /* portrait screens: story panel goes under the canvas */
-  body.kiosk .layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: 58% 42%; }
+  body.kiosk .layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: 22% 46% 32%; }
+  body.kiosk .palette { border-right: 0; border-bottom: 1px solid var(--border); }
   body.kiosk .inspector { border-left: 0; border-top: 1px solid var(--border); }
   .scenarios { grid-template-columns: minmax(0, 1fr); }
 }
@@ -450,8 +461,7 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
     <input id="wfName" class="wf-name" spellcheck="false" aria-label="Workflow name">
     <div class="toolbar">
       <span class="sim-badge kiosk-only" title="Fictional data. The agents are scripted for this demo.">Simulation · fictional data</span>
-      <button id="btnRestart" class="btn kiosk-only">↺ Start over</button>
-      <select id="templateSelect" class="studio-only" aria-label="Load template">
+      <select id="templateSelect" aria-label="Load template">
         <option value="">Templates…</option>
         <option value="fraud">Card fraud investigation</option>
         <option value="ato">Phishing / account takeover</option>
@@ -460,8 +470,11 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
       <button id="btnImport" class="btn studio-only">Import</button>
       <button id="btnExport" class="btn studio-only">Export JSON</button>
       <button id="btnValidate" class="btn studio-only">Validate</button>
-      <button id="btnRun" class="btn primary studio-only">▶ Run simulation</button>
-      <button id="btnStop" class="btn danger studio-only" hidden>■ Stop</button>
+      <button id="btnUndo" class="btn" title="Undo (Ctrl+Z)">↶ Undo</button>
+      <button id="btnReset" class="btn kiosk-only" title="Put this workflow back the way it started">Reset to original</button>
+      <button id="btnRun" class="btn primary">▶ Run simulation</button>
+      <button id="btnStop" class="btn danger" hidden>■ Stop</button>
+      <button id="btnRestart" class="btn kiosk-only">↺ Start over</button>
     </div>
   </header>
 
@@ -534,7 +547,7 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
     <div class="overlay-card" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle">
       <div class="big-mark">◈</div>
       <h1 id="welcomeTitle">How AI agents help investigate fraud</h1>
-      <p class="lead">Pick a case. A team of AI agents gathers the evidence and recommends what to do. Then <b>you</b> make the final call as the fraud analyst.</p>
+      <p class="lead">Pick a case. A team of AI agents gathers the evidence and recommends what to do. Then <b>you</b> make the final call as the fraud analyst. Afterwards, change the workflow and run it again.</p>
       <div class="scenarios">
         <button class="scenario" data-scenario="fraud">
           <span class="ic">💳</span><b>Suspicious card payment</b>
@@ -556,6 +569,7 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
       <div id="outcomeBody"></div>
       <div class="overlay-actions">
         <button id="btnOther" class="btn primary"></button>
+        <button id="btnEdit" class="btn">✎ Change this workflow</button>
         <button id="btnAgain" class="btn">↺ Start over</button>
       </div>
       <p class="fine">Simulated demo with fictional data. In a real deployment the agents run on a language model and read live systems; a person still signs off on every action.</p>
@@ -865,6 +879,8 @@ let KIOSK = !new URLSearchParams(location.search).has('studio');
 let story = []; // kiosk narration beats
 let scenario = 'fraud';
 let pendingHuman = null; // resolver of the open human-decision modal
+let panelTab = 'story'; // kiosk right panel: 'story' | 'settings'
+let undoStack = []; // JSON snapshots of wf, newest last
 let wf;
 let view = { x: 40, y: 40, scale: 1 };
 let selection = null; // { kind: 'node' | 'edge', id }
@@ -893,6 +909,26 @@ function save() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(wf)); } catch { /* storage unavailable */ }
 }
 
+function pushUndo() {
+  const snap = JSON.stringify(wf);
+  if (undoStack[undoStack.length - 1] !== snap) undoStack.push(snap);
+  if (undoStack.length > 60) undoStack.shift();
+}
+
+function undo() {
+  if (run.active) return;
+  const now = JSON.stringify(wf);
+  while (undoStack.length && undoStack[undoStack.length - 1] === now) undoStack.pop();
+  const prev = undoStack.pop();
+  if (!prev) return toast('Nothing to undo.');
+  wf = JSON.parse(prev);
+  selection = null;
+  resetRunVisuals();
+  $('#wfName').value = wf.name || '';
+  renderAll();
+  save();
+}
+
 function load() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -905,7 +941,8 @@ function isValidWorkflow(o) {
   return o && Array.isArray(o.nodes) && Array.isArray(o.edges) && o.nodes.every((n) => NODE_TYPES[n.type]);
 }
 
-function setWorkflow(next, { fit = true } = {}) {
+function setWorkflow(next, { fit = true, keepUndo = false } = {}) {
+  if (keepUndo && wf) pushUndo(); else undoStack = [];
   wf = next;
   selection = null;
   resetRunVisuals();
@@ -1057,7 +1094,7 @@ function renderPalette(filter = '') {
     if (!items.length) return '';
     return `<div class="pal-group"><h3><i style="background:${cat.color}"></i>${cat.label}</h3>
       ${items.map(([type, t]) => `<div class="pal-item" draggable="true" data-type="${type}" style="--c:${cat.color}">
-        <span class="ic">${t.icon}</span><div><div class="t">${t.title}</div><div class="d">${t.desc}</div></div></div>`).join('')}
+        <span class="ic">${t.icon}</span><div><div class="t">${t.title}</div><div class="d">${KIOSK ? PLAIN[type] : t.desc}</div></div></div>`).join('')}
     </div>`;
   }).join('');
 }
@@ -1065,6 +1102,7 @@ function renderPalette(filter = '') {
 function addNode(type, pos) {
   const t = NODE_TYPES[type];
   const node = { id: uid('n'), type, x: Math.round(pos.x), y: Math.round(pos.y), label: t.title, config: clone(t.defaults) };
+  pushUndo();
   wf.nodes.push(node);
   selection = { kind: 'node', id: node.id };
   renderAll();
@@ -1096,6 +1134,7 @@ function connect(from, fromPort, to) {
   if (catOf(src) === 'data' && catOf(dst) !== 'agent') return toast('Data sources feed AI agents — connect them to an agent.', true);
   if (wf.edges.some((e) => e.from === from && e.fromPort === fromPort && e.to === to)) return;
   if (createsCycle(from, to)) return toast('That connection would create a loop.', true);
+  pushUndo();
   wf.edges.push({ id: uid('e'), from, fromPort, to });
   renderEdges();
   renderInspector();
@@ -1104,6 +1143,7 @@ function connect(from, fromPort, to) {
 
 function deleteSelection() {
   if (!selection || run.active) return;
+  pushUndo();
   if (selection.kind === 'node') {
     wf.nodes = wf.nodes.filter((n) => n.id !== selection.id);
     wf.edges = wf.edges.filter((e) => e.from !== selection.id && e.to !== selection.id);
@@ -1119,6 +1159,7 @@ function duplicateNode(id) {
   const src = getNode(id);
   if (!src) return;
   const copy = { ...clone(src), id: uid('n'), x: src.x + 30, y: src.y + 30, label: src.label + ' (copy)' };
+  pushUndo();
   wf.nodes.push(copy);
   selection = { kind: 'node', id: copy.id };
   renderAll();
@@ -1130,8 +1171,16 @@ function duplicateNode(id) {
    ===================================================================== */
 
 function renderInspector() {
-  const el = $('#inspector');
-  if (KIOSK) return renderStory(el);
+  let el = $('#inspector');
+  if (KIOSK) {
+    el.innerHTML = `<div class="panel-tabs" role="tablist">
+        <button class="panel-tab ${panelTab === 'story' ? 'on' : ''}" data-tab="story" role="tab">What’s happening</button>
+        <button class="panel-tab ${panelTab === 'settings' ? 'on' : ''}" data-tab="settings" role="tab">Step settings</button>
+      </div><div class="panel-body ${panelTab === 'story' ? 'story-body' : ''}"></div>`;
+    el.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { panelTab = b.dataset.tab; renderInspector(); }));
+    el = $('.panel-body', el);
+    if (panelTab === 'story') return renderStory(el);
+  }
   if (selection?.kind === 'node' && getNode(selection.id)) return renderNodeInspector(el, getNode(selection.id));
   if (selection?.kind === 'edge') {
     const e = wf.edges.find((x) => x.id === selection.id);
@@ -1160,6 +1209,7 @@ function renderWorkflowInspector(el) {
         <li><b>Decisions</b> branch on case context, e.g. <span class="mono">ctx.risk_score &gt;= 70</span>.</li>
         <li>Select a node or connection to edit it; <kbd>Del</kbd> removes it.</li>
         <li>Drag empty canvas to pan, scroll to zoom.</li>
+        <li><kbd>Ctrl</kbd>+<kbd>Z</kbd> or <b>Undo</b> reverts a change.</li>
       </ul>
     </div>`;
   $('#wfDesc').addEventListener('input', (ev) => { wf.description = ev.target.value; save(); });
@@ -1192,7 +1242,7 @@ function renderStory(el) {
 function narrate(beat) {
   story.push(beat);
   lastActivity = Date.now();
-  if (KIOSK) renderInspector();
+  if (KIOSK && panelTab === 'story') renderInspector();
 }
 
 function renderEdgeInspector(el, e) {
@@ -1266,6 +1316,7 @@ function renderNodeInspector(el, node) {
 
 function select(sel) {
   selection = sel;
+  if (KIOSK && sel && !run.active) panelTab = 'settings';
   renderNodes();
   renderEdges();
   renderInspector();
@@ -1283,10 +1334,6 @@ canvas.addEventListener('pointerdown', (ev) => {
   const nodeEl = ev.target.closest('.node');
   const edgeEl = ev.target.closest('.edge');
 
-  if (KIOSK) { // read-only: clicking a step explains it, nothing moves or changes
-    select(nodeEl ? { kind: 'node', id: nodeEl.dataset.id } : null);
-    return;
-  }
 
   if (port && nodeEl) {
     const from = nodeEl.dataset.id;
@@ -1318,6 +1365,7 @@ canvas.addEventListener('pointermove', (ev) => {
     applyView();
   } else if (drag.mode === 'node') {
     const p = toWorld(ev.clientX, ev.clientY);
+    if (!drag.moved) pushUndo();
     drag.node.x = Math.round(p.x - drag.dx);
     drag.node.y = Math.round(p.y - drag.dy);
     drag.el.style.left = drag.node.x + 'px';
@@ -1350,7 +1398,6 @@ canvas.addEventListener('pointerup', (ev) => {
 
 canvas.addEventListener('wheel', (ev) => {
   ev.preventDefault();
-  if (KIOSK) return;
   const r = canvas.getBoundingClientRect();
   zoomAt(ev.deltaY < 0 ? 1.1 : 1 / 1.1, ev.clientX - r.left, ev.clientY - r.top);
 }, { passive: false });
@@ -1381,7 +1428,7 @@ canvas.addEventListener('drop', (ev) => {
 document.addEventListener('keydown', (ev) => {
   const typing = ev.target.matches('input, textarea, select');
   if (ev.ctrlKey && ev.shiftKey && ev.key.toLowerCase() === 'e') { ev.preventDefault(); return toggleMode(); }
-  if (KIOSK) return;
+  if (!typing && (ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { ev.preventDefault(); return undo(); }
   if (!typing && (ev.key === 'Delete' || ev.key === 'Backspace')) { ev.preventDefault(); deleteSelection(); }
   if (ev.key === 'Escape' && !$('#dialog').hidden) return closeDialog();
   if (!typing && ev.key === 'Escape') select(null);
@@ -1462,6 +1509,8 @@ function log({ kind = 'info', nodeId, msg, details }) {
   logEl.insertAdjacentHTML('beforeend', `<div class="log ${kind}"><span class="ts">${fmtTime()}</span><span>${icon}</span><span>${who}<span class="msg">${esc(msg)}</span>${det}</span></div>`);
   logEl.scrollTop = logEl.scrollHeight;
 }
+
+$('#inspector').addEventListener('focusin', (ev) => { if (ev.target.matches('input, textarea, select')) pushUndo(); });
 
 logEl.addEventListener('click', (ev) => {
   const who = ev.target.closest('[data-goto]');
@@ -1766,6 +1815,17 @@ async function runWorkflow() {
   if (run.active) return;
   const issues = validate();
   const errors = issues.filter((i) => i.level === 'error');
+  if (errors.length && KIOSK) {
+    resetRunVisuals();
+    errors.forEach((i) => { if (i.nodeId) nodeStatus[i.nodeId] = 'error'; });
+    renderNodes(); renderEdges();
+    return openDialog({
+      title: 'This workflow can’t run yet',
+      body: `<p class="muted">Fix these and press Run again. The problem steps are outlined in red.</p>
+        <ul class="issue-list">${errors.map((i) => `<li>${i.nodeId ? `<b>${esc(getNode(i.nodeId).label)}</b>: ` : ''}${esc(i.msg)}</li>`).join('')}</ul>`,
+      actions: [{ id: 'reset', label: 'Reset to original', onClick: resetToOriginal }, { id: 'ok', label: 'OK, I’ll fix it', cls: 'primary' }],
+    });
+  }
   if (errors.length) {
     showValidation();
     setRunStatus('Fix errors to run', 'err');
@@ -1773,6 +1833,8 @@ async function runWorkflow() {
   }
 
   run = { active: true, abort: false };
+  story = [];
+  panelTab = 'story';
   resetRunVisuals();
   selection = null;
   renderAll();
@@ -1935,7 +1997,7 @@ $('#templateSelect').addEventListener('change', (ev) => {
   const v = ev.target.value;
   ev.target.value = '';
   if (!v || run.active) return;
-  const apply = () => setWorkflow(buildTemplate(v));
+  const apply = () => { scenario = v; story = []; setWorkflow(buildTemplate(v), { keepUndo: true }); };
   if (wf.nodes.length <= 1) return apply();
   openDialog({
     title: 'Replace the current workflow?',
@@ -1975,6 +2037,8 @@ async function stopRun() {
 function applyMode() {
   document.body.classList.toggle('kiosk', KIOSK);
   $('#wfName').readOnly = KIOSK;
+  $('#btnRun').textContent = KIOSK ? '▶ Run this workflow' : '▶ Run simulation';
+  renderPalette($('#paletteSearch').value);
   selection = null;
   if (!wf) return;
   renderAll();
@@ -1993,6 +2057,7 @@ async function showWelcome() {
   await stopRun();
   ['#outcome', '#dialog', '#modal'].forEach((id) => { $(id).hidden = true; });
   story = [];
+  panelTab = 'story';
   scenario = 'fraud';
   setWorkflow(buildTemplate('fraud'));
   $('#welcome').hidden = false;
@@ -2004,6 +2069,7 @@ async function startScenario(name) {
   $('#outcome').hidden = true;
   scenario = name;
   story = [];
+  panelTab = 'story';
   setWorkflow(buildTemplate(name));
   await sleep(600); // let visitors see the map before it starts moving
   runWorkflow();
@@ -2037,10 +2103,14 @@ $('#welcome').addEventListener('click', (ev) => {
   if (card) startScenario(card.dataset.scenario);
 });
 $('#btnAgain').onclick = showWelcome;
+$('#btnEdit').onclick = () => { $('#outcome').hidden = true; panelTab = 'settings'; renderInspector(); toast('Drag components from the left, or click a step to change it. Then press Run.'); };
+function resetToOriginal() { if (!run.active) { story = []; setWorkflow(buildTemplate(scenario), { keepUndo: true }); toast('Workflow reset. Undo brings your changes back.'); } }
+$('#btnReset').onclick = resetToOriginal;
+$('#btnUndo').onclick = undo;
 $('#btnRestart').onclick = showWelcome;
 
 // Return to the welcome screen when a visitor walks away
-const IDLE_MS = 90_000;
+const IDLE_MS = 180_000;
 let lastActivity = Date.now();
 let idleWarned = false;
 ['pointermove', 'pointerdown', 'keydown', 'wheel'].forEach((type) =>
