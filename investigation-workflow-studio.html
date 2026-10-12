@@ -391,6 +391,7 @@ body.kiosk .wf-name { display: none; }
 body.kiosk .toolbar { font-size: 0.88em; gap: 0.6em; }
 body.kiosk .toolbar .btn { padding: 0.45em 0.85em; }
 body.kiosk .toolbar select { width: 9.5em; padding: 0.45em 0.5em; }
+body.kiosk .toolbar #kioskSpeed { width: 10.5em; }
 .panel-tabs { display: flex; gap: 0.3em; margin: 0 -0.2em 0.9em; padding-top: 0.8em; border-bottom: 1px solid var(--border); }
 .panel-tab {
   flex: 1; background: none; border: 0; border-bottom: 2px solid transparent; padding: 0.5em 0.4em; cursor: pointer;
@@ -425,8 +426,9 @@ body.kiosk .btn { padding: 0.5em 1.1em; }
 .beat {
   display: grid; grid-template-columns: 2em 1fr; gap: 0.6em; padding: 0.6em 0.4em;
   border-left: 3px solid var(--c); margin-bottom: 0.45em; background: var(--panel-2); border-radius: 0 8px 8px 0;
-  animation: beat-in .35s ease-out; --c: var(--control);
+  --c: var(--control);
 }
+.beat.fresh { animation: beat-in .35s ease-out; }
 .beat .ic { font-size: 1.25em; text-align: center; }
 .beat .bt { font-weight: 600; }
 .beat .bx { color: #c4cad6; font-size: 0.93em; margin-top: 0.15em; }
@@ -443,7 +445,15 @@ body.kiosk .btn { padding: 0.5em 1.1em; }
   width: min(90%, 62em); max-height: 92vh; overflow-y: auto;
   background: var(--panel); border: 1px solid var(--border); border-top: 4px solid var(--accent);
   border-radius: 14px; padding: 3% 3.5%; box-shadow: 0 20px 60px rgba(0,0,0,.6); text-align: center;
+  position: relative;
 }
+.overlay-close {
+  position: absolute; top: 0.7em; right: 0.7em; width: 2.2em; height: 2.2em; padding: 0;
+  display: grid; place-items: center; border-radius: 50%; cursor: pointer;
+  background: transparent; border: 1px solid var(--border); color: var(--muted); font-size: 1em; line-height: 1;
+}
+.overlay-close:hover { color: var(--text); background: var(--panel-2); border-color: #3d4556; }
+.story-empty .btn { margin-top: 1em; }
 .overlay-card h1 { font-size: 2em; margin: 0.2em 0 0.4em; text-wrap: balance; }
 .overlay-card h2 { font-size: 1.6em; margin: 0.2em 0 0.4em; text-wrap: balance; }
 .overlay-card .lead { font-size: 1.1em; color: #c4cad6; max-width: 46em; margin: 0 auto 1.4em; text-wrap: pretty; }
@@ -594,6 +604,7 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
 
   <div id="welcome" class="modal" hidden>
     <div class="overlay-card" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle">
+      <button class="overlay-close" data-close title="Close (Esc)" aria-label="Close">✕</button>
       <div class="big-mark">◈</div>
       <h1 id="welcomeTitle">How AI agents help investigate fraud</h1>
       <p class="lead">Pick a case. A team of AI agents gathers the evidence and recommends what to do. Then <b>you</b> make the final call as the fraud analyst. Afterwards, change the workflow and run it again.</p>
@@ -615,6 +626,7 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
 
   <div id="outcome" class="modal" hidden>
     <div class="overlay-card" role="dialog" aria-modal="true" aria-labelledby="outcomeTitle">
+      <button class="overlay-close" data-close title="Close (Esc)" aria-label="Close">✕</button>
       <div id="outcomeBody"></div>
       <div class="overlay-actions">
         <button id="btnOther" class="btn primary"></button>
@@ -1271,7 +1283,7 @@ function renderStory(el) {
   const sel = selection?.kind === 'node' && getNode(selection.id);
   const about = sel ? `<div class="about" style="--c:var(--${catOf(sel)})"><b>${NODE_TYPES[sel.type].icon} ${esc(sel.label)}</b>
     <span>${esc(PLAIN[sel.type])}. ${esc(ROLE_OF[catOf(sel)])}.</span></div>` : '';
-  const beats = story.map((b) => `<li class="beat ${b.kind || ''}"${b.cat ? ` style="--c:var(--${b.cat})"` : ''}>
+  const beats = story.map((b) => `<li class="beat ${b.kind || ''} ${b.fresh ? 'fresh' : ''}"${b.cat ? ` style="--c:var(--${b.cat})"` : ''}>
       <span class="ic">${b.icon}</span>
       <div><div class="bt">${esc(b.title)}</div>${b.text ? `<div class="bx">${esc(b.text)}</div>` : ''}
       ${b.items?.length ? `<ul>${b.items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>` : ''}</div></li>`).join('');
@@ -1282,15 +1294,18 @@ function renderStory(el) {
       <span style="--c:var(--human)"><i></i>Human (you)</span><span style="--c:var(--control)"><i></i>Workflow step</span>
     </div>
     ${about}
-    <ol class="beats" id="beats">${beats || '<li class="story-empty">Pick a case to start the investigation.<br>Click any step on the map to see what it does.</li>'}</ol>
+    <ol class="beats" id="beats">${beats || `<li class="story-empty">Press <b>▶ Run this workflow</b> to start, or pick a case.<br>Click any step on the map to see what it does.<br>
+      <button class="btn" data-choose>Choose a case</button></li>`}</ol>
     <div class="story-foot">Simulation · fictional data · personal details are masked before the AI sees them.</div>
   </div>`;
+  story.forEach((b) => { b.fresh = false; }); // only a just-added beat animates in
+  $('[data-choose]', el)?.addEventListener('click', () => { $('#welcome').hidden = false; });
   const list = $('#beats', el);
   list.scrollTop = list.scrollHeight;
 }
 
 function narrate(beat) {
-  story.push(beat);
+  story.push({ ...beat, fresh: true });
   lastActivity = Date.now();
   if (!panelOpen('right')) $('#inspector').classList.add('has-news');
   if (KIOSK && panelTab === 'story') renderInspector();
@@ -1500,6 +1515,8 @@ document.addEventListener('keydown', (ev) => {
   if (!typing && (ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { ev.preventDefault(); return undo(); }
   if (!typing && (ev.key === 'Delete' || ev.key === 'Backspace')) { ev.preventDefault(); deleteSelection(); }
   if (ev.key === 'Escape' && !$('#dialog').hidden) return closeDialog();
+  if (ev.key === 'Escape' && !$('#welcome').hidden) return closeWelcome();
+  if (ev.key === 'Escape' && !$('#outcome').hidden) return closeOutcome();
   if (!typing && ev.key === 'Escape') select(null);
   if (!typing && (ev.ctrlKey || ev.metaKey) && ev.key === 'd' && selection?.kind === 'node') { ev.preventDefault(); duplicateNode(selection.id); }
 });
@@ -2191,8 +2208,15 @@ function showOutcome(ctx, startedAt) {
 
 $('#welcome').addEventListener('click', (ev) => {
   const card = ev.target.closest('[data-scenario]');
-  if (card) startScenario(card.dataset.scenario);
+  if (card) return startScenario(card.dataset.scenario);
+  if (ev.target === ev.currentTarget || ev.target.closest('[data-close]')) closeWelcome();
 });
+$('#outcome').addEventListener('click', (ev) => {
+  if (ev.target === ev.currentTarget || ev.target.closest('[data-close]')) closeOutcome();
+});
+// Closing the start screen leaves the workflow ready to explore; closing the end screen shows the finished run
+function closeWelcome() { $('#welcome').hidden = true; }
+function closeOutcome() { $('#outcome').hidden = true; panelTab = 'story'; renderInspector(); }
 $('#btnAgain').onclick = showWelcome;
 $('#btnEdit').onclick = () => { $('#outcome').hidden = true; panelTab = 'settings'; renderInspector(); toast('Drag components from the left, or click a step to change it. Then press Run.'); };
 function resetToOriginal() { if (!run.active) { story = []; setWorkflow(buildTemplate(scenario), { keepUndo: true }); toast('Workflow reset. Undo brings your changes back.'); } }
