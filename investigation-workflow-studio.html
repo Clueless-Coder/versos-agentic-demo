@@ -207,14 +207,36 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .node-status { margin-left: auto; font-size: 13px; }
 .ports-out { padding-bottom: 6px; }
 .port-row { position: relative; display: flex; justify-content: flex-end; align-items: center; height: 20px; padding-right: 14px; font-size: 11px; color: var(--muted); }
+/* Sockets: ● circle = next step, ■ square = data feed. Outputs (right) wear the block's colour;
+   step inputs (left) are neutral; the data input on top of AI agents is teal. Hollow = open, filled = connected. */
 .port {
-  position: absolute; width: 14px; height: 14px; border-radius: 50%;
+  position: absolute; width: 18px; height: 18px; border-radius: 50%;
   background: var(--panel); border: 2px solid var(--c); cursor: crosshair; z-index: 2;
+  transition: transform .12s, box-shadow .12s;
 }
-.port:hover, .port.hot { background: var(--c); transform: scale(1.25); }
-.port.in { left: -8px; top: 20px; }
-.port.out { right: -8px; top: 3px; }
-.cat-data .port.out { border-radius: 3px; }
+.port.sq { border-radius: 4px; }
+.port.in { left: -10px; top: 18px; border-color: #d5dae4; }
+.port.in.data-in { left: calc(50% - 9px); top: -10px; border-color: var(--data); }
+.port.out { right: -10px; top: 1px; }
+.port.out.filled { background: var(--c); }
+.port.in.filled { background: #d5dae4; }
+.port.in.data-in.filled { background: var(--data); }
+.port:hover, .port.hot { transform: scale(1.3); }
+.port.target { transform: scale(1.4); box-shadow: 0 0 0 4px rgba(230,233,239,.22), 0 0 14px 3px rgba(230,233,239,.55); }
+.port.data-in.target { box-shadow: 0 0 0 4px rgba(45,212,191,.25), 0 0 14px 3px rgba(45,212,191,.7); }
+.port.open { animation: socket-pulse 1.5s ease-in-out infinite; }
+@keyframes socket-pulse { 50% { box-shadow: 0 0 0 5px rgba(109,139,255,.35); } }
+.port[data-label]:hover::after {
+  content: attr(data-label); position: absolute; bottom: calc(100% + 7px); left: 50%; transform: translateX(-50%);
+  white-space: nowrap; background: #0b0e13; color: var(--text); border: 1px solid var(--border);
+  font: 500 11px/1.3 var(--font-ui); padding: 2px 7px; border-radius: 5px; pointer-events: none;
+}
+.canvas.connecting .node { transition: opacity .15s; }
+.canvas.connecting .node.no-drop { opacity: .3; }
+.canvas.connecting .node.can-drop { box-shadow: 0 0 0 1px rgba(230,233,239,.4), 0 4px 14px rgba(0,0,0,.35); }
+.canvas.connecting .node.can-drop.hot-node { box-shadow: 0 0 0 2px #fff, 0 4px 14px rgba(0,0,0,.35); }
+.pal-item .sk { margin-top: 3px; font-size: 11px; color: var(--muted); letter-spacing: .08em; }
+.legend .shape { font-size: 11px; margin-right: 2px; }
 
 .node.st-running { box-shadow: 0 0 0 2px var(--c), 0 0 22px color-mix(in srgb, var(--c) 60%, transparent); animation: pulse 1s ease-in-out infinite; }
 .node.st-waiting { box-shadow: 0 0 0 2px var(--human), 0 0 22px rgba(251,191,36,.5); animation: pulse 1.4s ease-in-out infinite; }
@@ -572,7 +594,7 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
     <aside class="palette" data-label="Components">
       <input id="paletteSearch" class="search" placeholder="Search components…" aria-label="Search components">
       <div id="paletteList"></div>
-      <p class="hint">Drag a component onto the canvas, or click to add it.</p>
+      <p class="hint">Drag a component onto the map, or click to add it. If a step is selected, the new one connects to it. ● next step, ■ data.</p>
     </aside>
 
     <section class="canvas-wrap">
@@ -599,8 +621,8 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
         <span><i class="dot" style="--c:var(--human)"></i>Human</span>
         <span><i class="dot" style="--c:var(--control)"></i>Workflow step</span>
         <span class="sep"></span>
-        <span><i class="sw flow"></i>Next step</span>
-        <span><i class="sw data"></i>Data feed</span>
+        <span><i class="sw flow"></i><span class="shape">●</span> Next step</span>
+        <span><i class="sw data"></i><span class="shape">■</span> Data feed</span>
       </div>
     </section>
 
@@ -1147,14 +1169,24 @@ function nodeSummary(node) {
 const STATUS_ICON = { running: '⏳', waiting: '✋', done: '✔', skipped: '–', error: '⚠' };
 
 function renderNodes() {
+  const openCls = KIOSK && scenario === 'build' && !run.active ? 'open' : ''; // nudge visitors towards open sockets
   nodesLayer.innerHTML = wf.nodes.map((node) => {
     const t = NODE_TYPES[node.type];
     const st = nodeStatus[node.id];
     const cls = ['node', 'cat-' + t.category, selection?.kind === 'node' && selection.id === node.id ? 'selected' : '', st ? 'st-' + st : ''].join(' ');
     const multi = t.outputs.length > 1;
-    const outs = t.outputs.map((p) => `<div class="port-row">${multi ? esc(p) : ''}<div class="port out" data-port="${p}" title="Drag to connect"></div></div>`).join('');
+    const sq = t.category === 'data' ? 'sq' : '';
+    const outs = t.outputs.map((p) => {
+      const filled = wf.edges.some((e) => e.from === node.id && e.fromPort === p);
+      const label = t.category === 'data' ? 'Data out: drag to the ■ on top of an AI agent' : `${p === 'out' ? 'Next step' : p[0].toUpperCase() + p.slice(1)} out: drag to a ●`;
+      return `<div class="port-row">${multi ? esc(p) : ''}<div class="port out ${sq} ${filled ? 'filled' : openCls}" data-port="${p}" data-label="${label}"></div></div>`;
+    }).join('');
+    const flowIn = wf.edges.some((e) => e.to === node.id && !isDataNode(e.from));
+    const dataIn = wf.edges.some((e) => e.to === node.id && isDataNode(e.from));
+    const ins = (t.inputs ? `<div class="port in ${flowIn ? 'filled' : openCls}" data-port="in" data-label="Next step in"></div>` : '')
+      + (t.category === 'agent' ? `<div class="port in data-in sq ${dataIn ? 'filled' : ''}" data-port="data" data-label="Data in"></div>` : '');
     return `<div class="${cls}" data-id="${node.id}" style="left:${node.x}px;top:${node.y}px">
-      ${t.inputs ? '<div class="port in" data-port="in" title="Input"></div>' : ''}
+      ${ins}
       <div class="node-head">
         <span class="node-icon">${t.icon}</span>
         <div><div class="node-title">${esc(node.label)}</div>${node.label === t.title ? '' : `<div class="node-type">${esc(t.title)}</div>`}</div>
@@ -1183,6 +1215,12 @@ function curve(a, b) {
   return `M${a.x},${a.y} C${a.x + dx},${a.y} ${b.x - dx},${b.y} ${b.x},${b.y}`;
 }
 
+// Data feeds leave sideways and drop into the square socket on top of the agent
+function curveDown(a, b) {
+  const dx = Math.max(40, Math.abs(b.x - a.x) / 2), dy = Math.max(40, Math.abs(b.y - a.y) / 2);
+  return `M${a.x},${a.y} C${a.x + dx},${a.y} ${b.x},${b.y - dy} ${b.x},${b.y}`;
+}
+
 function bezierMid(a, b) {
   const dx = Math.max(50, Math.abs(b.x - a.x) / 2);
   const p1 = { x: a.x + dx, y: a.y }, p2 = { x: b.x - dx, y: b.y };
@@ -1192,13 +1230,13 @@ function bezierMid(a, b) {
 function renderEdges() {
   let html = `<defs>${CATEGORIES.map((c) => `<marker id="arrow-${c.id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:${c.color}"/></marker>`).join('')}</defs>`;
   for (const e of wf.edges) {
-    const a = portPos(e.from, e.fromPort, 'out');
-    const b = portPos(e.to, 'in', 'in');
-    if (!a || !b) continue;
     const kind = isDataNode(e.from) ? 'data' : 'flow';
+    const a = portPos(e.from, e.fromPort, 'out');
+    const b = portPos(e.to, kind === 'data' ? 'data' : 'in', 'in');
+    if (!a || !b) continue;
     const cat = catOf(getNode(e.from));
     const sel = selection?.kind === 'edge' && selection.id === e.id ? 'selected' : '';
-    const d = curve(a, { x: b.x - 4, y: b.y });
+    const d = kind === 'data' ? curveDown(a, { x: b.x, y: b.y - 6 }) : curve(a, { x: b.x - 4, y: b.y });
     let label = '';
     if (NODE_TYPES[getNode(e.from).type].outputs.length > 1) {
       const m = bezierMid(a, b);
@@ -1208,7 +1246,7 @@ function renderEdges() {
     html += `<g class="edge ${kind} cat-${cat} ${sel} ${edgeStatus[e.id] || ''}" data-id="${e.id}">
       <path class="edge-hit" d="${d}"/><path class="edge-line" d="${d}" marker-end="url(#arrow-${cat})"/>${label}</g>`;
   }
-  if (tempEdge) html += `<path class="temp-edge" d="${curve(tempEdge.a, tempEdge.b)}"/>`;
+  if (tempEdge) html += `<path class="temp-edge" d="${tempEdge.down ? curveDown(tempEdge.a, tempEdge.b) : curve(tempEdge.a, tempEdge.b)}"/>`;
   edgesSvg.innerHTML = html;
 }
 
@@ -1289,6 +1327,14 @@ function fitTarget() {
    Palette
    ===================================================================== */
 
+// e.g. "●■ → ●" for an agent: what plugs in, and what comes out
+function socketHint(type) {
+  const t = NODE_TYPES[type];
+  const ins = (t.inputs ? '●' : '') + (t.category === 'agent' ? '■' : '');
+  const outs = t.category === 'data' ? '■' : '●'.repeat(t.outputs.length);
+  return `${ins || '·'} → ${outs || '·'}`;
+}
+
 function renderPalette(filter = '') {
   const q = filter.trim().toLowerCase();
   $('#paletteList').innerHTML = CATEGORIES.map((cat) => {
@@ -1299,7 +1345,7 @@ function renderPalette(filter = '') {
     if (!items.length) return '';
     return `<div class="pal-group"><h3><i style="background:${cat.color}"></i>${cat.label}</h3>
       ${items.map(([type, t]) => `<div class="pal-item" draggable="true" data-type="${type}" style="--c:${cat.color}">
-        <span class="ic">${t.icon}</span><div><div class="t">${t.title}</div><div class="d">${KIOSK ? PLAIN[type] : t.desc}</div></div></div>`).join('')}
+        <span class="ic">${t.icon}</span><div><div class="t">${t.title}</div><div class="d">${KIOSK ? PLAIN[type] : t.desc}</div><div class="sk" title="Inputs → outputs (● next step, ■ data)">${socketHint(type)}</div></div></div>`).join('')}
     </div>`;
   }).join('');
 }
@@ -1333,18 +1379,27 @@ function createsCycle(from, to) {
   return false;
 }
 
-function connect(from, fromPort, to) {
+// Why a connection can't be made ('' when it can)
+function connectProblem(from, fromPort, to) {
   const src = getNode(from), dst = getNode(to);
-  if (!src || !dst || from === to) return;
-  if (!NODE_TYPES[dst.type].inputs) return toast(`${NODE_TYPES[dst.type].title} has no inputs.`, true);
-  if (catOf(src) === 'data' && catOf(dst) !== 'agent') return toast('Data sources feed AI agents — connect them to an agent.', true);
-  if (wf.edges.some((e) => e.from === from && e.fromPort === fromPort && e.to === to)) return;
-  if (createsCycle(from, to)) return toast('That connection would create a loop.', true);
-  pushUndo();
+  if (!src || !dst || from === to) return 'same';
+  if (!NODE_TYPES[dst.type].inputs) return `${NODE_TYPES[dst.type].title} has no inputs: it ${dst.type === 'trigger' ? 'starts the case' : 'is a data source'}.`;
+  if (catOf(src) === 'data' && catOf(dst) !== 'agent') return 'Data sources plug into the ■ on top of an AI agent.';
+  if (wf.edges.some((e) => e.from === from && e.fromPort === fromPort && e.to === to)) return 'Already connected.';
+  if (createsCycle(from, to)) return 'That connection would create a loop.';
+  return '';
+}
+
+function connect(from, fromPort, to, { undo = true } = {}) {
+  const problem = connectProblem(from, fromPort, to);
+  if (problem) { if (problem !== 'same') toast(problem, true); return false; }
+  if (undo) pushUndo();
   wf.edges.push({ id: uid('e'), from, fromPort, to });
+  renderNodes();
   renderEdges();
   renderInspector();
   save();
+  return true;
 }
 
 function deleteSelection() {
@@ -1411,7 +1466,8 @@ function renderWorkflowInspector(el) {
     <div class="insp-section"><h4>How to build</h4>
       <ul class="tips">
         <li>Drag components from the left onto the canvas.</li>
-        <li>Drag from a node's right-hand port to another node to connect them.</li>
+        <li>Connect ● to ● for the next step, and a data source's ■ to the ■ on top of an agent. Drag between them, or click one then the other.</li>
+        <li>With a step selected, a new component connects to it automatically.</li>
         <li><b style="color:var(--data)">Data sources</b> plug into agents as tools/context.</li>
         <li><b style="color:var(--human)">Human steps</b> pause the run until an analyst acts.</li>
         <li><b>Decisions</b> branch on case context, e.g. <span class="mono">ctx.risk_score &gt;= 70</span>.</li>
@@ -1441,9 +1497,9 @@ function reachesOutcome() {
 function checklistHtml() {
   const checks = [
     ['Add an AI agent from the left', wf.nodes.some((n) => catOf(n) === 'agent')],
-    ['Give it data: drag from a data source’s right-hand dot onto the agent', wf.edges.some((e) => isDataNode(e.from) && catOf(getNode(e.to)) === 'agent')],
+    ['Give it data: drag from a data source’s ■ to the ■ on top of the agent', wf.edges.some((e) => isDataNode(e.from) && catOf(getNode(e.to)) === 'agent')],
     ['Add a human check (Analyst Review or Approval Gate)', wf.nodes.some((n) => catOf(n) === 'human')],
-    ['Connect the alert, step by step, through to “Case closed”', reachesOutcome()],
+    ['Connect ● to ●, step by step, from the alert to “Case closed”', reachesOutcome()],
     ['Press ▶ Run this workflow', buildRan],
   ];
   const done = checks.filter(([, ok]) => ok).length;
@@ -1631,19 +1687,69 @@ function select(sel) {
    ===================================================================== */
 
 let drag = null; // { mode: 'pan'|'node'|'connect', ... }
+let pendingConnect = null; // click-to-connect: { from, fromPort } waiting for a target click
+
+// While connecting, light up the sockets that fit and dim the steps that can't take the connection
+function startConnecting(from, fromPort) {
+  const kind = isDataNode(from) ? 'data' : 'in';
+  canvas.classList.add('connecting');
+  nodesLayer.querySelectorAll('.node').forEach((el) => {
+    const ok = el.dataset.id !== from && !connectProblem(from, fromPort, el.dataset.id);
+    el.classList.toggle('can-drop', ok);
+    el.classList.toggle('no-drop', !ok && el.dataset.id !== from);
+    if (ok) el.querySelector(`.port.in[data-port="${kind === 'data' ? 'data' : 'in'}"]`)?.classList.add('target');
+  });
+  tempEdge = { a: portPos(from, fromPort, 'out'), b: null, down: false };
+  tempEdge.b = tempEdge.a;
+}
+
+function stopConnecting() {
+  canvas.classList.remove('connecting');
+  nodesLayer.querySelectorAll('.can-drop, .no-drop, .hot-node').forEach((el) => el.classList.remove('can-drop', 'no-drop', 'hot-node'));
+  nodesLayer.querySelectorAll('.port.target').forEach((p) => p.classList.remove('target'));
+  tempEdge = null;
+  renderEdges();
+}
+
+// Move the loose end of the line; snap it to the matching socket when over a step that fits
+function trackConnect(from, ev) {
+  nodesLayer.querySelectorAll('.hot-node').forEach((el) => el.classList.remove('hot-node'));
+  const target = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.node.can-drop');
+  if (target) {
+    const data = isDataNode(from);
+    target.classList.add('hot-node');
+    const b = portPos(target.dataset.id, data ? 'data' : 'in', 'in');
+    tempEdge.b = data ? { x: b.x, y: b.y - 6 } : { x: b.x - 4, y: b.y };
+    tempEdge.down = data;
+  } else {
+    tempEdge.b = toWorld(ev.clientX, ev.clientY);
+    tempEdge.down = false;
+  }
+  renderEdges();
+}
+
+function finishConnect(from, fromPort, ev) {
+  const target = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.node');
+  stopConnecting();
+  if (target && target.dataset.id !== from) connect(from, fromPort, target.dataset.id);
+}
 
 canvas.addEventListener('pointerdown', (ev) => {
   if (ev.button !== 0) return;
+  if (pendingConnect) { // second click of click-to-connect
+    const { from, fromPort } = pendingConnect;
+    pendingConnect = null;
+    finishConnect(from, fromPort, ev);
+    return;
+  }
   const port = ev.target.closest('.port.out');
   const nodeEl = ev.target.closest('.node');
   const edgeEl = ev.target.closest('.edge');
 
-
   if (port && nodeEl) {
     const from = nodeEl.dataset.id;
-    const a = portPos(from, port.dataset.port, 'out');
-    drag = { mode: 'connect', from, fromPort: port.dataset.port };
-    tempEdge = { a, b: a };
+    drag = { mode: 'connect', from, fromPort: port.dataset.port, sx: ev.clientX, sy: ev.clientY, moved: false };
+    startConnecting(from, port.dataset.port);
   } else if (nodeEl) {
     const node = getNode(nodeEl.dataset.id);
     const p = toWorld(ev.clientX, ev.clientY);
@@ -1664,6 +1770,7 @@ canvas.addEventListener('pointerdown', (ev) => {
 });
 
 canvas.addEventListener('pointermove', (ev) => {
+  if (pendingConnect) return trackConnect(pendingConnect.from, ev);
   if (!drag) return;
   if (drag.mode === 'pan') {
     view.x = drag.vx + ev.clientX - drag.sx;
@@ -1681,11 +1788,8 @@ canvas.addEventListener('pointermove', (ev) => {
     drag.moved = true;
     renderEdges();
   } else if (drag.mode === 'connect') {
-    tempEdge.b = toWorld(ev.clientX, ev.clientY);
-    nodesLayer.querySelectorAll('.port.in.hot').forEach((p) => p.classList.remove('hot'));
-    const target = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.node');
-    target?.querySelector('.port.in')?.classList.add('hot');
-    renderEdges();
+    if (Math.abs(ev.clientX - drag.sx) + Math.abs(ev.clientY - drag.sy) > 4) drag.moved = true;
+    trackConnect(drag.from, ev);
   }
 });
 
@@ -1697,10 +1801,11 @@ canvas.addEventListener('pointerup', (ev) => {
     if (drag.moved) save(); else if (!panelOpen('right')) setPanel('right', true);
   }
   if (drag.mode === 'connect') {
-    tempEdge = null;
-    const target = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.node');
-    if (target && target.dataset.id !== drag.from) connect(drag.from, drag.fromPort, target.dataset.id);
-    else renderEdges();
+    if (drag.moved) finishConnect(drag.from, drag.fromPort, ev);
+    else { // a click on a socket: wait for a click on the step to connect to
+      pendingConnect = { from: drag.from, fromPort: drag.fromPort };
+      toast('Now click the step to connect to. Esc cancels.');
+    }
   }
   canvas.classList.remove('panning');
   drag = null;
@@ -1722,10 +1827,37 @@ $('#paletteList').addEventListener('dragstart', (ev) => {
 $('#paletteList').addEventListener('click', (ev) => {
   const item = ev.target.closest('.pal-item');
   if (!item) return;
-  const r = canvas.getBoundingClientRect();
-  const p = toWorld(r.left + r.width / 2 - 110, r.top + r.height / 2 - 40);
-  addNode(item.dataset.type, { x: p.x + (Math.random() * 40 - 20), y: p.y + (Math.random() * 40 - 20) });
+  const anchor = selection?.kind === 'node' ? getNode(selection.id) : null;
+  let pos;
+  if (anchor) { // place it next to the selected step: data sources above an agent, other steps to its right
+    const data = NODE_TYPES[item.dataset.type].category === 'data';
+    pos = data ? { x: anchor.x - 40 + Math.random() * 80, y: anchor.y - 190 } : { x: anchor.x + 290, y: anchor.y + Math.random() * 30 - 15 };
+  } else {
+    const r = canvas.getBoundingClientRect();
+    const p = toWorld(r.left + r.width / 2 - 110, r.top + r.height / 2 - 40);
+    pos = { x: p.x + (Math.random() * 40 - 20), y: p.y + (Math.random() * 40 - 20) };
+  }
+  addWithAutoConnect(item.dataset.type, pos, anchor);
 });
+
+// If a step is selected, a new block connects to it: data source -> selected agent, otherwise selected -> new
+function addWithAutoConnect(type, pos, anchor) {
+  const node = addNode(type, pos);
+  if (!anchor || run.active) return;
+  const newData = catOf(node) === 'data';
+  let ok = false;
+  if (newData) {
+    if (catOf(anchor) === 'agent') ok = connect(node.id, 'data', anchor.id, { undo: false });
+  } else if (catOf(anchor) !== 'data' && NODE_TYPES[anchor.type].outputs.length) {
+    const outs = NODE_TYPES[anchor.type].outputs;
+    const port = outs.find((p) => !wf.edges.some((e) => e.from === anchor.id && e.fromPort === p)) || outs[0];
+    if (!connectProblem(anchor.id, port, node.id)) ok = connect(anchor.id, port, node.id, { undo: false });
+  }
+  if (ok) {
+    select({ kind: 'node', id: node.id });
+    toast(`Connected to “${anchor.label}”. Click empty space first to add a step without connecting it.`);
+  }
+}
 canvas.addEventListener('dragover', (ev) => { ev.preventDefault(); canvas.classList.add('drop-target'); });
 canvas.addEventListener('dragleave', () => canvas.classList.remove('drop-target'));
 canvas.addEventListener('drop', (ev) => {
@@ -1734,7 +1866,7 @@ canvas.addEventListener('drop', (ev) => {
   const type = ev.dataTransfer.getData('text/plain');
   if (!NODE_TYPES[type]) return;
   const p = toWorld(ev.clientX, ev.clientY);
-  addNode(type, { x: p.x - 110, y: p.y - 30 });
+  addWithAutoConnect(type, { x: p.x - 110, y: p.y - 30 }, selection?.kind === 'node' ? getNode(selection.id) : null);
 });
 
 document.addEventListener('keydown', (ev) => {
@@ -1742,6 +1874,7 @@ document.addEventListener('keydown', (ev) => {
   if (ev.ctrlKey && ev.shiftKey && ev.key.toLowerCase() === 'e') { ev.preventDefault(); return toggleMode(); }
   if (!typing && (ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { ev.preventDefault(); return undo(); }
   if (!typing && (ev.key === 'Delete' || ev.key === 'Backspace')) { ev.preventDefault(); deleteSelection(); }
+  if (ev.key === 'Escape' && pendingConnect) { pendingConnect = null; return stopConnecting(); }
   if (ev.key === 'Escape' && !$('#dialog').hidden) return closeDialog();
   if (ev.key === 'Escape' && !$('#welcome').hidden) return closeWelcome();
   if (ev.key === 'Escape' && !$('#outcome').hidden) return closeOutcome();
@@ -2154,7 +2287,7 @@ async function runWorkflow() {
   if (run.active) return;
   const issues = validate();
   const errors = issues.filter((i) => i.level === 'error');
-  if (KIOSK && !reachesOutcome()) errors.push({ level: 'error', msg: 'Nothing connects the alert to an outcome yet. Drag from the dot on the right of each step to the next step, ending at an outcome.' });
+  if (KIOSK && !reachesOutcome()) errors.push({ level: 'error', msg: 'Nothing connects the alert to an outcome yet. Connect ● to ● from each step to the next, ending at an outcome.' });
   if (errors.length && KIOSK) {
     resetRunVisuals();
     errors.forEach((i) => { if (i.nodeId) nodeStatus[i.nodeId] = 'error'; });
