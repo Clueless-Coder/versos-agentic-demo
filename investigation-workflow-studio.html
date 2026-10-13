@@ -954,7 +954,7 @@ const NODE_TYPES = {
   },
 };
 
-const OUTCOMES = ['Close – no action', 'Close – confirmed fraud', 'Block account & refund', 'Block card, refund & report', 'Release payment', 'Contain & reset credentials', 'Reset password only', 'Close – no takeover', 'Hold & escalate', 'Hold payment & text customer', 'File SAR', 'Refer to compliance', 'Refer to law enforcement'];
+const OUTCOMES = ['Close – no action', 'Close – confirmed fraud', 'Block card', 'Block card – known scam', 'Block account', 'Release payment', 'Contain & reset credentials', 'Reset password only', 'Close – no takeover', 'Hold & escalate', 'Hold payment & text customer', 'File SAR', 'Refer to compliance'];
 
 // A node's outputs: its choices for human steps, otherwise the type's fixed outputs
 const choicesOf = (node) => node.config?.choices?.length ? node.config.choices : NODE_TYPES[node.type].outputs.map((p) => ({ port: p, short: p, label: p[0].toUpperCase() + p.slice(1) }));
@@ -1048,14 +1048,14 @@ const LABELS = {
 const SCENARIO_NAMES = { fraud: 'Suspicious card payment', ato: 'Phishing campaign & account takeover', legit: 'Unusual payment abroad', build: 'Build your own' };
 const NEXT_SCENARIO = { fraud: 'ato', ato: 'legit', legit: 'build', build: 'fraud' };
 const money = (v) => '$' + Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 });
+// Outcomes state only the immediate action, never what might happen after it
 const plainOutcome = (o) => ({
-  'File SAR': 'Block card & report to the authorities', 'Refer to compliance': 'Passed to the compliance team',
-  'Close – no action': 'Closed: no fraud found', 'Contain & reset credentials': 'Account contained, password reset & payments recalled',
-  'Block card, refund & report': 'Card blocked, customer refunded & reported to the authorities', 'Release payment': 'Payment released, case closed',
-  'Reset password only': 'Password reset; the payments stay', 'Close – no takeover': 'Closed: no takeover found', 'Hold & escalate': 'Outgoing payments on hold; escalated to a senior investigator',
-  'Hold payment & text customer': 'Payment on hold; customer texted to confirm',
-  'Close – confirmed fraud': 'Closed: fraud confirmed', 'Block account & refund': 'Account blocked & customer refunded',
-  'Refer to law enforcement': 'Passed to the police',
+  'Block card': 'Card blocked', 'Block card – known scam': 'Card blocked: known scam', 'Block account': 'Account blocked',
+  'File SAR': 'Reported to the authorities', 'Refer to compliance': 'Passed to the compliance team',
+  'Close – no action': 'Closed: no fraud found', 'Close – confirmed fraud': 'Closed: fraud confirmed',
+  'Contain & reset credentials': 'Account secured', 'Release payment': 'Payment released, case closed',
+  'Reset password only': 'Password reset', 'Close – no takeover': 'Closed: no takeover found',
+  'Hold & escalate': 'Outgoing payments on hold; escalated to a senior investigator', 'Hold payment & text customer': 'Payment on hold',
 }[o] || o);
 
 /* =====================================================================
@@ -1089,11 +1089,11 @@ function buildTemplate(name) {
             { port: 'unclear', short: 'unclear', label: 'Can’t reach the customer / need more evidence' },
           ],
         }),
-        n('o1', 'end', 1690, -40, 'Block, refund & report', { outcome: 'Block card, refund & report', notify: '#fraud-ops' }),
-        n('o2', 'end', 1690, 90, 'Block card & report', { outcome: 'File SAR', notify: '#fraud-ops' }),
+        n('o1', 'end', 1690, -40, 'Card blocked', { outcome: 'Block card', notify: '#fraud-ops' }),
+        n('o2', 'end', 1690, 90, 'Card blocked: known scam', { outcome: 'Block card – known scam', notify: '#fraud-ops' }),
         n('o3', 'end', 1690, 220, 'Payment released', { outcome: 'Release payment' }),
-        n('h2', 'human_escalation', 1690, 380, 'Senior investigator', { instructions: 'The card is frozen while you look into this. Investigate in depth and record your finding.' }),
-        n('o4', 'end', 2000, 290, 'Block card & report', { outcome: 'File SAR' }),
+        n('h2', 'human_escalation', 1690, 380, 'Senior investigator', { instructions: 'Card is frozen. Marked for investigation.' }),
+        n('o4', 'end', 2000, 290, 'Card blocked', { outcome: 'Block card' }),
         n('o5', 'end', 2000, 420, 'Payment released', { outcome: 'Release payment' }),
         n('o6', 'end', 2000, 550, 'Passed to compliance', { outcome: 'Refer to compliance' }),
         n('a4', 'agent_summarizer', 840, 520, 'Auto-close summary'),
@@ -1134,8 +1134,8 @@ function buildTemplate(name) {
             { port: 'unreachable', short: 'no reply', label: 'Can’t reach the customer' },
           ],
         }),
-        n('o1', 'end', 1420, 0, 'Contain account & recall payments', { outcome: 'Contain & reset credentials', notify: '#soc-incidents' }),
-        n('o2', 'end', 1420, 130, 'Reset password only', { outcome: 'Reset password only' }),
+        n('o1', 'end', 1420, 0, 'Account secured', { outcome: 'Contain & reset credentials', notify: '#soc-incidents' }),
+        n('o2', 'end', 1420, 130, 'Password reset', { outcome: 'Reset password only' }),
         n('o3', 'end', 1420, 260, 'No takeover: close', { outcome: 'Close – no takeover' }),
         n('o4', 'end', 1420, 390, 'Hold payments & escalate', { outcome: 'Hold & escalate' }),
         n('a3', 'agent_summarizer', 840, 480, 'Auto-close summary'),
@@ -1172,8 +1172,8 @@ function buildTemplate(name) {
           ],
         }),
         n('o1', 'end', 1400, 10, 'Payment released', { outcome: 'Release payment' }),
-        n('o2', 'end', 1400, 140, 'Block card & report', { outcome: 'File SAR' }),
-        n('o4', 'end', 1400, 270, 'Hold & text customer', { outcome: 'Hold payment & text customer' }),
+        n('o2', 'end', 1400, 140, 'Card blocked', { outcome: 'Block card' }),
+        n('o4', 'end', 1400, 270, 'Payment on hold', { outcome: 'Hold payment & text customer' }),
         n('a3', 'agent_summarizer', 840, 460, 'Auto-close summary'),
         n('o3', 'end', 1110, 460, 'Auto-close', { outcome: 'Close – no action' }),
       ],
@@ -2234,11 +2234,11 @@ function simulateAgent(node, ctx, data) {
       const rationale = fraud
         ? `High risk (${risk}) with ${signals} corroborating anomalies: ${(ctx.anomalies || []).join('; ') || 'risk score alone'}.`
         : `Activity is consistent with the subject's baseline (risk ${risk}, ${signals} anomalies).`;
-      out = { verdict: fraud ? 'FRAUD' : 'LEGITIMATE', confidence, rationale, recommended_action: fraud ? 'Block card, notify customer, file SAR' : 'Release transaction' };
+      out = { verdict: fraud ? 'FRAUD' : 'LEGITIMATE', confidence, rationale, recommended_action: fraud ? 'Block card' : 'Release transaction' };
       msg = `Verdict [${out.verdict}] at ${Math.round(confidence * 100)}% confidence. Recommends: ${out.recommended_action}.`;
       story = {
         title: `Verdict: ${fraud ? 'likely fraud' : 'looks genuine'} (${Math.round(confidence * 100)}% confident)`,
-        text: fraud ? `Recommends: block the card, tell the customer and report it to the authorities. It's sending this to a person to approve.` : 'Recommends releasing the payment.',
+        text: fraud ? 'Recommends blocking the card. It’s sending this to a person to approve.' : 'Recommends releasing the payment.',
       };
       break;
     }
@@ -2428,9 +2428,9 @@ async function executeNode(node, ctx) {
       narrate({ icon: '⚠', kind: 'warn', title: 'Not sure enough', text: `The agent is only ${Math.round(confidence * 100)}% confident, so it flags the case for a person to check.` });
     }
     if (c.autonomy === 'act' && out.verdict === 'FRAUD') {
-      ctx.actions_taken = [...(ctx.actions_taken || []), 'Card temporarily frozen'];
-      log({ kind: 'warn', nodeId: node.id, msg: 'Autonomous action taken: card temporarily frozen pending review.' });
-      if (wf.aiAlone) narrate({ icon: '🤖', kind: 'warn', title: `${node.label} acted on its own`, text: 'Froze the card straight away, without asking anyone.' });
+      ctx.actions_taken = [...(ctx.actions_taken || []), 'Card blocked'];
+      log({ kind: 'warn', nodeId: node.id, msg: 'Autonomous action taken: card blocked.' });
+      if (wf.aiAlone) narrate({ icon: '🤖', kind: 'warn', title: `${node.label} acted on its own`, text: 'Blocked the card.' });
     }
     return ['out'];
   }
