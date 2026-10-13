@@ -755,7 +755,7 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
       <div class="scenarios">
         <button class="scenario" data-scenario="fraud">
           <span class="ic">💳</span><b>Suspicious card payment</b>
-          <span>A $4,500 payment from a customer who normally spends about $120 a month.</span>
+          <span>A SAR 4,500 payment from a customer who normally spends about SAR 120 a month.</span>
           <span class="go">Start investigation ▶</span>
         </button>
         <button class="scenario" data-scenario="ato">
@@ -765,7 +765,7 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
         </button>
         <button class="scenario" data-scenario="legit">
           <span class="ic">🧳</span><b>Unusual payment abroad</b>
-          <span>An $850 purchase in Lisbon. Fraud, or just a customer on holiday?</span>
+          <span>A SAR 850 purchase in Lisbon. Fraud, or just a customer on holiday?</span>
           <span class="go">Start investigation ▶</span>
         </button>
         <button class="scenario build" data-scenario="build">
@@ -1047,7 +1047,8 @@ const LABELS = {
 };
 const SCENARIO_NAMES = { fraud: 'Suspicious card payment', ato: 'Phishing campaign & account takeover', legit: 'Unusual payment abroad', build: 'Build your own' };
 const NEXT_SCENARIO = { fraud: 'ato', ato: 'legit', legit: 'build', build: 'fraud' };
-const money = (v) => '$' + Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 });
+// Saudi riyal, written as "SAR" (the new riyal sign isn't in most fonts yet)
+const money = (v) => 'SAR ' + Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 });
 // Outcomes state only the immediate action, never what might happen after it
 const plainOutcome = (o) => ({
   'Block card': 'Card blocked', 'Block card – known scam': 'Card blocked: known scam', 'Block account': 'Account blocked',
@@ -2215,7 +2216,7 @@ function simulateAgent(node, ctx, data) {
         out.exposure = sus.reduce((s, t) => s + t.amount, 0);
       }
       msg = `${linked} linked case(s)${ti ? `, attributed to campaign ${ti.campaign}` : ''}${out.compromised ? '; signs of account compromise (impossible travel)' : ''}`
-        + (out.suspicious_transactions?.length ? `; ${out.suspicious_transactions.length} transactions to new payees after the suspicious logins, exposure ${out.exposure.toFixed(2)}.` : '.');
+        + (out.suspicious_transactions?.length ? `; ${out.suspicious_transactions.length} transactions to new payees after the suspicious logins, exposure ${money(out.exposure)}.` : '.');
       story = {
         title: ti ? `Linked to the “${ti.campaign}” scam campaign` : `${linked} related case(s) found`,
         items: [
@@ -2250,7 +2251,7 @@ function simulateAgent(node, ctx, data) {
         ctx.verdict ? `Verdict: ${ctx.verdict} (${Math.round((ctx.confidence || 0) * 100)}%)` : null,
         ctx.anomalies?.length ? `Anomalies:\n  - ${ctx.anomalies.join('\n  - ')}` : null,
         ctx.campaign ? `Campaign: ${ctx.campaign}` : null,
-        ctx.suspicious_transactions?.length ? `Suspicious transactions (exposure ${ctx.exposure.toFixed(2)}):\n  - ${ctx.suspicious_transactions.join('\n  - ')}` : null,
+        ctx.suspicious_transactions?.length ? `Suspicious transactions (exposure ${money(ctx.exposure)}):\n  - ${ctx.suspicious_transactions.join('\n  - ')}` : null,
         ctx.audit.length ? `Human decisions:\n  - ${ctx.audit.map((a) => `${a.step} (${a.by}): ${a.choice || a.decision}${a.notes ? ` — note: “${a.notes}”` : ''}`).join('\n  - ')}` : null,
       ].filter(Boolean);
       out = { report: lines.join('\n') };
