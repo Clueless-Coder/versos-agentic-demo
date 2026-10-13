@@ -578,8 +578,6 @@ body.kiosk .btn { padding: 0.5em 1.1em; }
 .scenario span { color: var(--muted); }
 .scenario .go { margin-top: auto; padding-top: 0.6em; color: var(--accent); font-weight: 600; }
 .fine { font-size: 0.85em; color: var(--muted); margin: 0; }
-.cta { font-size: 1.05em; font-weight: 600; color: var(--text); margin: 0 0 0.6em; }
-.cta b { color: var(--warn); }
 .result-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(9em, 1fr)); gap: 0.8em; margin: 1.2em 0; }
 .result-stats .stat { text-align: left; }
 .result-stats .stat b { font-size: 1.6em; }
@@ -776,7 +774,6 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
           <span class="go">Start building ▶</span>
         </button>
       </div>
-      <p class="cta" data-cta></p>
       <p class="fine">Simulated demo: every customer, payment and data source is fictional, and the AI agents are scripted for this demo. Nothing you do here is stored.</p>
     </div>
   </div>
@@ -790,7 +787,6 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
         <button id="btnEdit" class="btn">✎ Change this workflow</button>
         <button id="btnAgain" class="btn">↺ Start over</button>
       </div>
-      <p class="cta" data-cta></p>
       <p class="fine">Simulated demo with fictional data. In a real deployment the agents run on a language model and read live systems; a person still signs off on every action.</p>
     </div>
   </div>
@@ -809,14 +805,6 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
   <script>window.IWS_STANDALONE = true;</script>
   <script>
 'use strict';
-
-/* =====================================================================
-   Event settings: change these for each event
-   ===================================================================== */
-const DEMO_CONFIG = {
-  stand: 'Stand 00', // placeholder: replace with the real stand number
-  cta: 'Want to see this on your own data? Talk to us at',
-};
 
 /* =====================================================================
    Component catalog
@@ -2864,7 +2852,6 @@ setInterval(() => {
 renderPalette();
 applyView();
 logEl.innerHTML = '<div class="empty-log">Press <b>▶ Run simulation</b> to walk a sample case through the workflow. Human steps will pause for your decision.</div>';
-document.querySelectorAll('[data-cta]').forEach((el) => { el.innerHTML = `${esc(DEMO_CONFIG.cta)} <b>${esc(DEMO_CONFIG.stand)}</b>`; });
 applyMode();
 if (KIOSK) showWelcome(); else setWorkflow(load());
 window.IWS_READY = true;
