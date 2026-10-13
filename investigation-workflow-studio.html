@@ -591,13 +591,36 @@ body.kiosk .btn { padding: 0.5em 1.1em; }
 .overlay-actions .btn { font-size: 1.05em; padding: 0.6em 1.4em; }
 
 /* Human decision in kiosk mode */
-body.kiosk .modal-card { width: min(90%, 46em); font-size: 1em; }
-body.kiosk .kv { grid-template-columns: 38% 1fr; font-size: 0.95em; }
+body.kiosk .modal-card { width: min(94%, 68em); font-size: 1em; }
+.mb-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 1.2em; align-items: start; }
+.mb-decide .choices { margin-top: 0; }
+.mb-decide .callout { margin-bottom: 0.8em; }
+@media (max-width: 1000px), (max-aspect-ratio: 1/1) { .mb-grid { grid-template-columns: minmax(0, 1fr); } }
+body.kiosk .kv { grid-template-columns: 42% 1fr; font-size: 0.9em; gap: 3px 10px; }
 .callout {
   border: 1px solid var(--agent); background: color-mix(in srgb, var(--agent) 10%, transparent); border-radius: 8px;
   padding: 0.7em 0.9em; margin-bottom: 0.9em;
 }
 .callout b { color: var(--agent); }
+.choices { display: grid; gap: 0.45em; margin: 0.9em 0 0.4em; }
+.choices-h { font-weight: 600; }
+.choices-h em { color: var(--muted); font-weight: 400; font-style: normal; }
+.choice {
+  display: grid; grid-template-columns: 1.2em 1fr minmax(8em, 40%); gap: 0.6em; align-items: center; text-align: left;
+  padding: 0.6em 0.8em; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2); color: var(--text); cursor: pointer;
+}
+.choice:hover:not(:disabled) { border-color: var(--accent); }
+.choice .dot { width: 1em; height: 1em; border-radius: 50%; border: 2px solid var(--muted); }
+.choice.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--panel)); }
+.choice.on .dot { border-color: var(--accent); background: radial-gradient(circle, var(--accent) 42%, transparent 48%); }
+.choice .ct { color: var(--muted); font-size: 0.88em; text-align: right; }
+.choice.on .ct { color: var(--text); font-weight: 500; }
+.choice:disabled { opacity: 0.5; cursor: not-allowed; }
+.ai-tag { font-size: 0.75em; padding: 0.1em 0.5em; border-radius: 999px; white-space: nowrap; font-weight: 600; margin-left: 0.3em;
+  background: color-mix(in srgb, var(--agent) 15%, transparent); color: var(--agent); }
+.notes-field { margin: 0.6em 0 0; }
+.notes-field textarea { min-height: 3.2em; }
+.choice-list { margin: 0; padding-left: 1.2em; font-size: 12.5px; line-height: 1.5; }
 .reasons { margin: 0.4em 0 0.6em; }
 .reasons > span { display: block; font-size: 0.85em; color: var(--muted); margin-bottom: 0.4em; }
 .reasons .chip { font-size: 0.9em; padding: 0.35em 0.8em; margin: 0 0.3em 0.4em 0; display: inline-block; }
@@ -627,7 +650,7 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
       <select id="templateSelect" class="studio-only" aria-label="Load template">
         <option value="">Templates…</option>
         <option value="fraud">Card fraud investigation</option>
-        <option value="ato">Phishing / account takeover</option>
+        <option value="ato">Phishing campaign / account takeover</option>
         <option value="legit">Unusual payment abroad (genuine)</option>
         <option value="blank">Blank workflow</option>
       </select>
@@ -715,11 +738,11 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
         </div>
       </div>
       <div id="modalBody" class="modal-body"></div>
-      <label class="field studio-only">
-        <span>Analyst notes <em id="notesReq"></em></span>
-        <textarea id="modalNotes" rows="3" placeholder="Rationale, extra context, follow-ups…"></textarea>
+      <label class="field notes-field">
+        <span>Your note <em id="notesReq"></em></span>
+        <textarea id="modalNotes" rows="2" maxlength="200" placeholder="Add a note for the case report: what the customer said, next steps…"></textarea>
+        <span class="help" id="notesCount"></span>
       </label>
-      <div id="modalReasons" class="reasons kiosk-only"></div>
       <div id="modalActions" class="modal-actions"></div>
     </div>
   </div>
@@ -738,8 +761,8 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
           <span class="go">Start investigation ▶</span>
         </button>
         <button class="scenario" data-scenario="ato">
-          <span class="ic">🎣</span><b>Phishing &amp; account takeover</b>
-          <span>A customer reports a fake “your password expires today” email. Did the criminals get in?</span>
+          <span class="ic">🎣</span><b>Phishing campaign &amp; account takeover</b>
+          <span>Our system catches a fake “your password expires today” campaign and finds a customer who clicked. Did the criminals get in?</span>
           <span class="go">Start investigation ▶</span>
         </button>
         <button class="scenario" data-scenario="legit">
@@ -810,6 +833,28 @@ const agentDefaults = (role, systemPrompt, outputs) => ({
   model: 'claude-opus-5-5', role, systemPrompt, autonomy: 'recommend',
   confidenceThreshold: 0.75, maxTurns: 10, outputs,
 });
+
+// Human steps: each choice is its own output, so every finding leads somewhere different.
+// `ai` marks the choice the AI would pick when its evidence says 'fraud' or 'genuine' ('any' = always).
+const CHOICES = {
+  human_review: [
+    { port: 'fraud', short: 'fraud', label: 'Fraud confirmed', ai: 'fraud' },
+    { port: 'partly', short: 'partly', label: 'Partly: some of the activity was the customer’s' },
+    { port: 'genuine', short: 'genuine', label: 'Not fraud: the customer confirms it was them', ai: 'genuine' },
+    { port: 'unclear', short: 'unclear', label: 'Can’t reach the customer / need more evidence' },
+  ],
+  human_approval: [
+    { port: 'approved', short: 'approve', label: 'Approve the AI’s recommendation', ai: 'any' },
+    { port: 'rejected', short: 'reject', label: 'Reject: the customer confirms it was genuine' },
+    { port: 'escalate', short: 'escalate', label: 'Need more evidence: escalate' },
+  ],
+  human_escalation: [
+    { port: 'fraud', short: 'fraud', label: 'Fraud confirmed', ai: 'fraud' },
+    { port: 'genuine', short: 'genuine', label: 'Genuine after all', ai: 'genuine' },
+    { port: 'refer', short: 'refer', label: 'Still unclear: refer to compliance' },
+  ],
+};
+const ports = (type) => CHOICES[type].map((c) => c.port);
 
 const NODE_TYPES = {
   // Flow control
@@ -905,23 +950,37 @@ const NODE_TYPES = {
 
   // Human analysts
   human_review: {
-    category: 'human', title: 'Analyst Review', icon: '🧑‍💻', inputs: true, outputs: ['out'],
-    desc: 'Analyst reviews and annotates',
-    defaults: { role: 'Tier 1 Analyst', assignee: 'fraud-ops-queue', sla: '4h', instructions: 'Review the agent findings and add any context the agents missed.', requireNotes: false },
+    category: 'human', title: 'Analyst Review', icon: '🧑‍💻', inputs: true, outputs: ports('human_review'),
+    desc: 'Analyst reviews and records a finding',
+    defaults: { role: 'Fraud Analyst', assignee: 'fraud-ops-queue', sla: '4h', instructions: 'Review what the agents found, check with the customer, and record your finding.', requireNotes: false, choices: CHOICES.human_review },
   },
   human_approval: {
-    category: 'human', title: 'Approval Gate', icon: '✅', inputs: true, outputs: ['approved', 'rejected'],
-    desc: 'Approve or reject a recommendation',
-    defaults: { role: 'Fraud Lead', assignee: 'fraud-leads', sla: '2h', instructions: 'Approve or reject the recommended action.', requireNotes: true },
+    category: 'human', title: 'Approval Gate', icon: '✅', inputs: true, outputs: ports('human_approval'),
+    desc: 'Approve, reject or escalate a recommendation',
+    defaults: { role: 'Fraud Lead', assignee: 'fraud-leads', sla: '2h', instructions: 'Approve or reject the AI’s recommendation, or escalate if you need more evidence.', requireNotes: false, choices: CHOICES.human_approval },
   },
   human_escalation: {
-    category: 'human', title: 'Escalation', icon: '📣', inputs: true, outputs: ['out'],
+    category: 'human', title: 'Escalation', icon: '📣', inputs: true, outputs: ports('human_escalation'),
     desc: 'Hand off to a senior investigator',
-    defaults: { role: 'Senior Investigator', assignee: 'special-investigations', sla: '24h', instructions: 'Take ownership of the case and complete a full investigation.', requireNotes: true },
+    defaults: { role: 'Senior Investigator', assignee: 'special-investigations', sla: '24h', instructions: 'Take ownership of the case, investigate in depth and record your finding.', requireNotes: false, choices: CHOICES.human_escalation },
   },
 };
 
-const OUTCOMES = ['Close – no action', 'Close – confirmed fraud', 'Block account & refund', 'Contain & reset credentials', 'File SAR', 'Refer to compliance', 'Refer to law enforcement'];
+const OUTCOMES = ['Close – no action', 'Close – confirmed fraud', 'Block account & refund', 'Block card, refund & report', 'Release payment', 'Contain & reset credentials', 'Reset password only', 'Hold & escalate', 'Hold payment & text customer', 'File SAR', 'Refer to compliance', 'Refer to law enforcement'];
+
+// A node's outputs: its choices for human steps, otherwise the type's fixed outputs
+const choicesOf = (node) => node.config?.choices?.length ? node.config.choices : NODE_TYPES[node.type].outputs.map((p) => ({ port: p, short: p, label: p[0].toUpperCase() + p.slice(1) }));
+const outputsOf = (node) => choicesOf(node).map((c) => c.port);
+const portShort = (node, port) => choicesOf(node).find((c) => c.port === port)?.short || port;
+
+// What the AI's evidence points to, and which choice it would pick
+function aiView(ctx) {
+  if (ctx.verdict) return ctx.verdict === 'FRAUD' ? 'fraud' : 'genuine';
+  if (ctx.compromised != null) return ctx.compromised ? 'fraud' : 'genuine';
+  if (ctx.risk_score != null) return ctx.risk_score >= 60 ? 'fraud' : 'genuine';
+  return null;
+}
+const aiPick = (node, ctx) => { const ch = choicesOf(node), v = aiView(ctx); return ch.find((c) => c.ai === 'any') || (v && ch.find((c) => c.ai === v)) || null; };
 
 const FIELDS = {
   trigger: [
@@ -992,18 +1051,21 @@ const ROLE_OF = {
   human: 'Human: the AI never makes this call alone',
 };
 const LABELS = {
-  case_id: 'Case', user_id: 'Customer', amount: 'Amount', sender_domain: 'Email sent from', risk_score: 'Risk score',
+  case_id: 'Case', user_id: 'Customer', amount: 'Amount', sender_domain: 'Email sent from', campaign_domain: 'Phishing domain',
+  emails_sent: 'Fake emails sent', clicked: 'Customers who clicked', risk_score: 'Risk score',
   severity: 'Severity', verdict: 'AI verdict', confidence: 'AI confidence', recommended_action: 'AI recommends',
   campaign: 'Scam campaign', linked_cases: 'Linked cases', compromised: 'Account taken over?', exposure: 'Money at risk',
   needs_human_review: 'Flagged for review',
 };
-const REASONS = ['The evidence is convincing', 'It matches a known scam', 'Customer confirmed it wasn’t them', 'I want more evidence', 'Customer says it was genuine'];
-const SCENARIO_NAMES = { fraud: 'Suspicious card payment', ato: 'Phishing & account takeover', legit: 'Unusual payment abroad', build: 'Build your own' };
+const SCENARIO_NAMES = { fraud: 'Suspicious card payment', ato: 'Phishing campaign & account takeover', legit: 'Unusual payment abroad', build: 'Build your own' };
 const NEXT_SCENARIO = { fraud: 'ato', ato: 'legit', legit: 'build', build: 'fraud' };
 const money = (v) => '$' + Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 });
 const plainOutcome = (o) => ({
   'File SAR': 'Block card & report to the authorities', 'Refer to compliance': 'Passed to the compliance team',
-  'Close – no action': 'Closed: no fraud found', 'Contain & reset credentials': 'Account secured & password reset',
+  'Close – no action': 'Closed: no fraud found', 'Contain & reset credentials': 'Account contained, password reset & payments recalled',
+  'Block card, refund & report': 'Card blocked, customer refunded & reported to the authorities', 'Release payment': 'Payment released, case closed',
+  'Reset password only': 'Password reset; the payments stay', 'Hold & escalate': 'Outgoing payments on hold; escalated to a senior investigator',
+  'Hold payment & text customer': 'Payment on hold; customer texted to confirm',
   'Close – confirmed fraud': 'Closed: fraud confirmed', 'Block account & refund': 'Account blocked & customer refunded',
   'Refer to law enforcement': 'Passed to the police',
 }[o] || o);
@@ -1019,7 +1081,7 @@ function buildTemplate(name) {
   if (name === 'fraud') {
     return {
       name: 'Card fraud investigation',
-      description: 'Triage high-value card alerts, enrich with device and IP intelligence, reach a verdict and route to a human for approval.',
+      description: 'Triage high-value card alerts, enrich with device and IP intelligence, reach a verdict and let a person decide what happens.',
       nodes: [
         n('t1', 'trigger', 40, 330, 'Card fraud alert'),
         n('d1', 'ds_transactions', 300, 90),
@@ -1030,47 +1092,74 @@ function buildTemplate(name) {
         n('a2', 'agent_enrichment', 840, 220),
         n('d4', 'ds_customer', 1200, 40),
         n('a3', 'agent_investigator', 1110, 220),
-        n('h1', 'human_approval', 1380, 220, 'Fraud lead approval', { instructions: 'The investigator agent recommends blocking the card. Approve to block it and report it to the authorities, or reject to send the case for a full investigation.' }),
-        n('o1', 'end', 1660, 130, 'Block card & report', { outcome: 'File SAR', notify: '#fraud-ops' }),
-        n('h2', 'human_escalation', 1660, 330),
-        n('o2', 'end', 1930, 330, 'Investigation closed', { outcome: 'Refer to compliance' }),
-        n('a4', 'agent_summarizer', 840, 500, 'Auto-close summary'),
-        n('o3', 'end', 1110, 500, 'Auto-close', { outcome: 'Close – no action' }),
+        n('h1', 'human_approval', 1380, 200, 'Fraud lead approval', {
+          instructions: 'The investigator agent recommends blocking the card. Check with the customer, then record what you found: each finding leads to a different outcome.',
+          choices: [
+            { port: 'not_them', short: 'not them', label: 'Customer confirmed it wasn’t them' },
+            { port: 'scam', short: 'known scam', label: 'It matches a known scam', ai: 'fraud' },
+            { port: 'genuine', short: 'genuine', label: 'Customer says the payment was genuine', ai: 'genuine' },
+            { port: 'unclear', short: 'unclear', label: 'Can’t reach the customer / need more evidence' },
+          ],
+        }),
+        n('o1', 'end', 1690, -40, 'Block, refund & report', { outcome: 'Block card, refund & report', notify: '#fraud-ops' }),
+        n('o2', 'end', 1690, 90, 'Block card & report', { outcome: 'File SAR', notify: '#fraud-ops' }),
+        n('o3', 'end', 1690, 220, 'Payment released', { outcome: 'Release payment' }),
+        n('h2', 'human_escalation', 1690, 380, 'Senior investigator', { instructions: 'The card is frozen while you look into this. Investigate in depth and record your finding.' }),
+        n('o4', 'end', 2000, 290, 'Block card & report', { outcome: 'File SAR' }),
+        n('o5', 'end', 2000, 420, 'Payment released', { outcome: 'Release payment' }),
+        n('o6', 'end', 2000, 550, 'Passed to compliance', { outcome: 'Refer to compliance' }),
+        n('a4', 'agent_summarizer', 840, 520, 'Auto-close summary'),
+        n('o7', 'end', 1110, 520, 'Auto-close', { outcome: 'Close – no action' }),
       ],
       edges: [
         e('t1', 'a1'), e('d1', 'a1', 'data'), e('a1', 'c1'),
         e('c1', 'a2', 'yes'), e('c1', 'a4', 'no'),
         e('d2', 'a2', 'data'), e('d3', 'a2', 'data'),
         e('a2', 'a3'), e('d4', 'a3', 'data'), e('d1', 'a3', 'data'),
-        e('a3', 'h1'), e('h1', 'o1', 'approved'), e('h1', 'h2', 'rejected'), e('h2', 'o2'),
-        e('a4', 'o3'),
+        e('a3', 'h1'), e('h1', 'o1', 'not_them'), e('h1', 'o2', 'scam'), e('h1', 'o3', 'genuine'), e('h1', 'h2', 'unclear'),
+        e('h2', 'o4', 'fraud'), e('h2', 'o5', 'genuine'), e('h2', 'o6', 'refer'),
+        e('a4', 'o7'),
       ],
     };
   }
 
   if (name === 'ato') {
     return {
-      name: 'Phishing / account takeover',
-      description: 'Investigate a reported phishing email, check for account compromise and contain with analyst sign-off.',
+      name: 'Phishing campaign & account takeover',
+      description: 'Our system detects a phishing campaign impersonating the bank, finds a customer who clicked, and checks whether criminals got into the account.',
       nodes: [
-        n('t1', 'trigger', 40, 300, 'User-reported phish', { source: 'Phishing mailbox', payload: '{\n  "user_id": "jdoe",\n  "reported_by": "jdoe@corp.example",\n  "sender_domain": "micros0ft-login.example",\n  "subject": "Password expires today"\n}' }),
-        n('d1', 'ds_documents', 300, 60, 'Reported email'),
+        n('t1', 'trigger', 40, 300, 'Phishing campaign detected', { source: 'Email security (automatic detection)', payload: '{\n  "campaign_domain": "yourbank-secure-login.example",\n  "subject": "Your password expires today",\n  "emails_sent": 1240,\n  "clicked": 37,\n  "user_id": "usr_31877",\n  "clicked_at": "2 hours ago"\n}' }),
+        n('d1', 'ds_documents', 300, 60, 'Email security logs'),
         n('d2', 'ds_threatintel', 540, 60),
-        n('a1', 'agent_triage', 300, 300, 'Phish triage', { systemPrompt: 'Analyse the reported email for phishing indicators (sender, links, urgency, impersonation). Score risk 0-100.' }),
-        n('c1', 'decision', 580, 300, 'Malicious?', { condition: "ctx.severity !== 'low'" }),
+        n('a1', 'agent_triage', 300, 300, 'Phishing triage', { systemPrompt: 'Analyse the detected campaign: look-alike domains, links, urgency, impersonation and who clicked. Score risk 0-100.' }),
+        n('c1', 'decision', 580, 300, 'High risk?', { condition: 'ctx.risk_score >= 60' }),
         n('d3', 'ds_siem', 840, 60, 'Sign-in logs'),
         n('d4', 'ds_transactions', 1080, 60, 'Account transactions', { query: "SELECT * FROM transactions\nWHERE user_id = :user_id\n  AND ts > now() - interval '7 days'\nORDER BY ts DESC" }),
-        n('a2', 'agent_correlation', 840, 220, 'Compromise check', { systemPrompt: 'Search sign-in logs and other reports for clicks, credential submissions and suspicious logins tied to this campaign. Review recent account transactions for payments, payee changes or transfers made after the suspicious logins.', outputs: 'linked_cases, campaign, compromised, suspicious_transactions' }),
-        n('h1', 'human_review', 1110, 220, 'Fraud analyst review', { role: 'Fraud Analyst', assignee: 'fraud-ops-queue', sla: '1h', instructions: 'Confirm whether the account was taken over and whether any transactions after the suspicious logins are unauthorised. Note any payments to recall before containment.', requireNotes: true }),
-        n('a3', 'agent_summarizer', 1380, 220, 'Incident report'),
-        n('o1', 'end', 1650, 220, 'Contain account', { outcome: 'Contain & reset credentials', notify: '#soc-incidents' }),
-        n('o2', 'end', 840, 440, 'Benign — close', { outcome: 'Close – no action' }),
+        n('a2', 'agent_correlation', 840, 220, 'Account check', { systemPrompt: 'For customers who clicked, search sign-in logs for logins from new devices or places after the click, and review recent transactions for payments or payee changes made after those logins.', outputs: 'linked_cases, campaign, compromised, suspicious_transactions' }),
+        n('h1', 'human_review', 1110, 200, 'Fraud analyst review', {
+          role: 'Fraud Analyst', sla: '1h',
+          instructions: 'The account check found a login from a new device right after the click, then payments to new payees. Contact the customer and record what you found: each finding leads to a different outcome.',
+          choices: [
+            { port: 'not_them', short: 'not them', label: 'Customer didn’t log in or make the payments', ai: 'fraud' },
+            { port: 'clicked_only', short: 'clicked only', label: 'Customer clicked the link, but the payments were theirs' },
+            { port: 'genuine', short: 'all genuine', label: 'Customer says the logins and payments were all theirs', ai: 'genuine' },
+            { port: 'unreachable', short: 'no reply', label: 'Can’t reach the customer' },
+          ],
+        }),
+        n('o1', 'end', 1420, 0, 'Contain account & recall payments', { outcome: 'Contain & reset credentials', notify: '#soc-incidents' }),
+        n('o2', 'end', 1420, 130, 'Reset password only', { outcome: 'Reset password only' }),
+        n('o3', 'end', 1420, 260, 'No takeover: close', { outcome: 'Close – no action' }),
+        n('o4', 'end', 1420, 390, 'Hold payments & escalate', { outcome: 'Hold & escalate' }),
+        n('a3', 'agent_summarizer', 840, 480, 'Auto-close summary'),
+        n('o5', 'end', 1110, 480, 'Benign: close', { outcome: 'Close – no action' }),
       ],
       edges: [
         e('t1', 'a1'), e('d1', 'a1', 'data'), e('d2', 'a1', 'data'), e('a1', 'c1'),
-        e('c1', 'a2', 'yes'), e('c1', 'o2', 'no'),
+        e('c1', 'a2', 'yes'), e('c1', 'a3', 'no'),
         e('d3', 'a2', 'data'), e('d2', 'a2', 'data'), e('d4', 'a2', 'data'),
-        e('a2', 'h1'), e('h1', 'a3'), e('a3', 'o1'),
+        e('a2', 'h1'),
+        e('h1', 'o1', 'not_them'), e('h1', 'o2', 'clicked_only'), e('h1', 'o3', 'genuine'), e('h1', 'o4', 'unreachable'),
+        e('a3', 'o5'),
       ],
     };
   }
@@ -1086,16 +1175,24 @@ function buildTemplate(name) {
         n('a1', 'agent_triage', 300, 300),
         n('c1', 'decision', 570, 300, 'High risk?', { condition: 'ctx.risk_score >= 60' }),
         n('a2', 'agent_investigator', 840, 160),
-        n('h1', 'human_approval', 1110, 160, 'Fraud lead approval', { instructions: 'Approve to block the card, or reject to release the payment.' }),
-        n('o1', 'end', 1380, 60, 'Block card & report', { outcome: 'File SAR' }),
-        n('o2', 'end', 1380, 260, 'Payment released', { outcome: 'Close – no action' }),
-        n('a3', 'agent_summarizer', 840, 440, 'Auto-close summary'),
-        n('o3', 'end', 1110, 440, 'Auto-close', { outcome: 'Close – no action' }),
+        n('h1', 'human_approval', 1110, 140, 'Fraud lead approval', {
+          instructions: 'Check with the customer, then record what you found: each finding leads to a different outcome.',
+          choices: [
+            { port: 'travelling', short: 'travelling', label: 'Customer confirms they’re travelling', ai: 'genuine' },
+            { port: 'not_them', short: 'not them', label: 'Customer didn’t make this payment', ai: 'fraud' },
+            { port: 'unreachable', short: 'no reply', label: 'Can’t reach the customer' },
+          ],
+        }),
+        n('o1', 'end', 1400, 10, 'Payment released', { outcome: 'Release payment' }),
+        n('o2', 'end', 1400, 140, 'Block card & report', { outcome: 'File SAR' }),
+        n('o4', 'end', 1400, 270, 'Hold & text customer', { outcome: 'Hold payment & text customer' }),
+        n('a3', 'agent_summarizer', 840, 460, 'Auto-close summary'),
+        n('o3', 'end', 1110, 460, 'Auto-close', { outcome: 'Close – no action' }),
       ],
       edges: [
         e('t1', 'a1'), e('d1', 'a1', 'data'), e('d2', 'a1', 'data'), e('a1', 'c1'),
         e('c1', 'a2', 'yes'), e('c1', 'a3', 'no'), e('d2', 'a2', 'data'),
-        e('a2', 'h1'), e('h1', 'o1', 'approved'), e('h1', 'o2', 'rejected'),
+        e('a2', 'h1'), e('h1', 'o1', 'travelling'), e('h1', 'o2', 'not_them'), e('h1', 'o4', 'unreachable'),
         e('a3', 'o3'),
       ],
     };
@@ -1117,7 +1214,7 @@ function buildTemplate(name) {
    State
    ===================================================================== */
 
-const STORAGE_KEY = 'iws.workflow.v1';
+const STORAGE_KEY = 'iws.workflow.v2'; // v2: human steps have choices as outputs
 // Kiosk mode is the default public demo: locked canvas, guided story, auto-reset.
 // Open with ?studio, or press Ctrl+Shift+E, for the full editor.
 let KIOSK = !new URLSearchParams(location.search).has('studio');
@@ -1234,12 +1331,14 @@ function renderNodes() {
     const t = NODE_TYPES[node.type];
     const st = nodeStatus[node.id];
     const cls = ['node', 'cat-' + t.category, selection?.kind === 'node' && selection.id === node.id ? 'selected' : '', st ? 'st-' + st : ''].join(' ');
-    const multi = t.outputs.length > 1;
+    const outPorts = outputsOf(node);
+    const multi = outPorts.length > 1;
     const sq = t.category === 'data' ? 'sq' : '';
-    const outs = t.outputs.map((p) => {
+    const outs = outPorts.map((p) => {
       const filled = wf.edges.some((e) => e.from === node.id && e.fromPort === p);
-      const label = t.category === 'data' ? 'Data out: drag to the ■ on top of an AI agent' : `${p === 'out' ? 'Next step' : p[0].toUpperCase() + p.slice(1)} out: drag to a ●`;
-      return `<div class="port-row">${multi ? esc(p) : ''}<div class="port out ${sq} ${filled ? 'filled' : openCls}" data-port="${p}" data-label="${label}"></div></div>`;
+      const short = portShort(node, p);
+      const label = t.category === 'data' ? 'Data out: drag to the ■ on top of an AI agent' : `${p === 'out' ? 'Next step' : `“${short}”`} out: drag to a ●`;
+      return `<div class="port-row">${multi ? esc(short) : ''}<div class="port out ${sq} ${filled ? 'filled' : openCls}" data-port="${p}" data-label="${label}"></div></div>`;
     }).join('');
     const flowIn = wf.edges.some((e) => e.to === node.id && !isDataNode(e.from));
     const dataIn = wf.edges.some((e) => e.to === node.id && isDataNode(e.from));
@@ -1298,10 +1397,12 @@ function renderEdges() {
     const sel = selection?.kind === 'edge' && selection.id === e.id ? 'selected' : '';
     const d = kind === 'data' ? curveDown(a, { x: b.x, y: b.y - 6 }) : curve(a, { x: b.x - 4, y: b.y });
     let label = '';
-    if (NODE_TYPES[getNode(e.from).type].outputs.length > 1) {
+    const src = getNode(e.from);
+    if (outputsOf(src).length > 1) {
       const m = bezierMid(a, b);
-      const w = e.fromPort.length * 6.5 + 12;
-      label = `<g class="edge-label"><rect x="${m.x - w / 2}" y="${m.y - 9}" width="${w}" height="18" rx="9"/><text x="${m.x}" y="${m.y + 4}" text-anchor="middle">${esc(e.fromPort)}</text></g>`;
+      const text = portShort(src, e.fromPort);
+      const w = text.length * 6.5 + 12;
+      label = `<g class="edge-label"><rect x="${m.x - w / 2}" y="${m.y - 9}" width="${w}" height="18" rx="9"/><text x="${m.x}" y="${m.y + 4}" text-anchor="middle">${esc(text)}</text></g>`;
     }
     html += `<g class="edge ${kind} cat-${cat} ${sel} ${edgeStatus[e.id] || ''}" data-id="${e.id}">
       <path class="edge-hit" d="${d}"/><path class="edge-line" d="${d}" marker-end="url(#arrow-${cat})"/>${label}</g>`;
@@ -1675,6 +1776,10 @@ function renderNodeInspector(el, node) {
     <div class="insp-head" style="--c:var(--${cat})"><span class="node-icon">${t.icon}</span><div><h2>${esc(t.title)}</h2><div class="muted">${esc(t.desc)}</div></div></div>
     <label class="field"><span>Name</span><input id="f_label" value="${esc(node.label)}" spellcheck="false"></label>
     ${node.type === 'decision' ? ruleSliderHtml(node) : ''}
+    ${cat === 'human' ? `<div class="insp-section"><h4>Choices (each one is an output ●)</h4><ol class="choice-list">${choicesOf(node).map((ch) => {
+      const e = wf.edges.find((x) => x.from === node.id && x.fromPort === ch.port);
+      return `<li><b>${esc(ch.short)}</b>: ${esc(ch.label)} <span class="muted">→ ${esc(e ? getNode(e.to).label : 'not connected yet')}</span></li>`;
+    }).join('')}</ol></div>` : ''}
     <div class="insp-section"><h4>Configuration</h4>${fieldsFor(node.type).map((f) => fieldHtml(f, node.config[f.key])).join('')}</div>
     ${related}
     <div class="danger-zone">
@@ -1908,8 +2013,8 @@ function addWithAutoConnect(type, pos, anchor) {
   let ok = false;
   if (newData) {
     if (catOf(anchor) === 'agent') ok = connect(node.id, 'data', anchor.id, { undo: false });
-  } else if (catOf(anchor) !== 'data' && NODE_TYPES[anchor.type].outputs.length) {
-    const outs = NODE_TYPES[anchor.type].outputs;
+  } else if (catOf(anchor) !== 'data' && outputsOf(anchor).length) {
+    const outs = outputsOf(anchor);
     const port = outs.find((p) => !wf.edges.some((e) => e.from === anchor.id && e.fromPort === p)) || outs[0];
     if (!connectProblem(anchor.id, port, node.id)) ok = connect(anchor.id, port, node.id, { undo: false });
   }
@@ -1972,9 +2077,14 @@ function validate() {
       continue;
     }
     if (t.inputs && !incomingFlow.length) add('warn', 'Not reachable — nothing flows into this step.', n.id);
-    for (const port of t.outputs) {
-      if (!outgoing.some((e) => e.fromPort === port)) add(t.outputs.length > 1 ? 'error' : 'warn', t.outputs.length > 1 ? `Branch “${port}” is not connected.` : 'Dead end — connect this step to a next step or an outcome.', n.id);
+    const outs = outputsOf(n);
+    for (const port of outs) {
+      if (outgoing.some((e) => e.fromPort === port)) continue;
+      // Public view: a human choice may stay unconnected (it's greyed out in the pop-up); a decision branch may not
+      const level = outs.length > 1 && !(KIOSK && cat === 'human') ? 'error' : 'warn';
+      add(level, outs.length > 1 ? `Choice “${portShort(n, port)}” is not connected.` : 'Dead end — connect this step to a next step or an outcome.', n.id);
     }
+    if (KIOSK && cat === 'human' && outs.length > 1 && !outgoing.length) add('error', 'Connect at least one of this step’s choices (●) to a next step or an outcome.', n.id);
     if (n.type === 'decision') {
       try { compileCondition(n.config.condition); } catch (err) { add('error', `Condition does not parse: ${err.message}`, n.id); }
     }
@@ -2055,7 +2165,7 @@ function mockFetch(node, ctx) {
     case 'ds_ipgeo': return { ip: ctx.ip_address || 'n/a', country: 'RO', asn: 'AS9009 M247 Ltd', is_vpn: true, risk: 'high' };
     case 'ds_device': return { device_id: 'fp_7c21e9', first_seen: 'today', emulator: false, shared_accounts: 3 };
     case 'ds_siem': return { failed_logins_7d: 14, new_src_ips: 3, mfa_resets: 1, impossible_travel: true };
-    case 'ds_threatintel': return { matches: 1, indicator: ctx.ip_address || ctx.sender_domain || 'n/a', campaign: 'BlackCart-2026', confidence: 'medium' };
+    case 'ds_threatintel': return { matches: 1, indicator: ctx.campaign_domain || ctx.ip_address || ctx.sender_domain || 'n/a', campaign: 'BlackCart-2026', confidence: ctx.campaign_domain ? 'high' : 'medium', domain_registered: ctx.campaign_domain ? 'yesterday' : undefined };
     case 'ds_documents': return { files: 2, types: ['eml', 'html'], urls_found: 1, credential_form: true };
     default: return { records: 1, note: 'Sample record from custom source' };
   }
@@ -2081,7 +2191,9 @@ function simulateAgent(node, ctx, data) {
       let score = 25 + Math.min(40, amt / 100);
       if (amt) drivers.push(`amount ${amt}`);
       if (hist && amt > hist.avg_monthly_spend * 10) { score += 15; drivers.push(`${Math.round(amt / hist.avg_monthly_spend)}× normal monthly spend`); }
-      if (ctx.sender_domain && /[0-9]/.test(ctx.sender_domain)) { score += 30; drivers.push('look-alike sender domain'); }
+      const domain = ctx.campaign_domain || ctx.sender_domain;
+      if (domain) { score += 30; drivers.push(`look-alike domain impersonating the bank (${domain})`); }
+      if (ctx.clicked) { score += 5; drivers.push(`${ctx.clicked} customers clicked the link`); }
       if (pick('credential_form')) { score += 15; drivers.push('credential-harvesting form'); }
       if (pick('matches')?.matches) { score += 10; drivers.push('threat intel match'); }
       if (pick('travel_notice')?.travel_notice) { score -= 15; drivers.push(`customer told the bank they are travelling (${pick('travel_notice').travel_notice})`); }
@@ -2111,7 +2223,7 @@ function simulateAgent(node, ctx, data) {
       out = { linked_cases: linked, campaign: ti?.campaign || null, compromised: !!siem?.impossible_travel };
       if (txns) {
         const sus = txns.recent.filter((t) => t.new_payee);
-        out.suspicious_transactions = sus.map((t) => `${t.ts} · ${t.amount.toFixed(2)} to ${t.payee} (${t.channel})`);
+        out.suspicious_transactions = sus.map((t) => `${t.ts} · ${money(t.amount)} to ${t.payee} (${t.channel})`);
         out.exposure = sus.reduce((s, t) => s + t.amount, 0);
       }
       msg = `${linked} linked case(s)${ti ? `, attributed to campaign ${ti.campaign}` : ''}${out.compromised ? '; signs of account compromise (impossible travel)' : ''}`
@@ -2151,7 +2263,7 @@ function simulateAgent(node, ctx, data) {
         ctx.anomalies?.length ? `Anomalies:\n  - ${ctx.anomalies.join('\n  - ')}` : null,
         ctx.campaign ? `Campaign: ${ctx.campaign}` : null,
         ctx.suspicious_transactions?.length ? `Suspicious transactions (exposure ${ctx.exposure.toFixed(2)}):\n  - ${ctx.suspicious_transactions.join('\n  - ')}` : null,
-        ctx.audit.length ? `Human decisions:\n  - ${ctx.audit.map((a) => `${a.step}: ${a.decision}${a.notes ? ` — “${a.notes}”` : ''}`).join('\n  - ')}` : null,
+        ctx.audit.length ? `Human decisions:\n  - ${ctx.audit.map((a) => `${a.step} (${a.by}): ${a.choice || a.decision}${a.notes ? ` — note: “${a.notes}”` : ''}`).join('\n  - ')}` : null,
       ].filter(Boolean);
       out = { report: lines.join('\n') };
       msg = 'Case report drafted.';
@@ -2170,6 +2282,7 @@ function simulateAgent(node, ctx, data) {
 function kioskValue(k, v) {
   if (k === 'confidence') return Math.round(v * 100) + '%';
   if (k === 'amount' || k === 'exposure') return money(v);
+  if (typeof v === 'number' && Math.abs(v) >= 1000) return v.toLocaleString('en-US');
   if (k === 'risk_score') return `${v} / 100`;
   if (typeof v === 'boolean') return v ? 'Yes' : 'No';
   if (k === 'verdict') return v === 'FRAUD' ? 'Likely fraud' : 'Looks genuine';
@@ -2184,7 +2297,7 @@ function askHuman(node, ctx) {
     const finish = (answer) => { pendingHuman = null; modal.hidden = true; resolve(answer); };
     pendingHuman = finish;
 
-    const show = ['case_id', 'user_id', 'amount', 'sender_domain', 'risk_score', 'severity', 'verdict', 'confidence', 'recommended_action', 'campaign', 'linked_cases', 'compromised', 'exposure', 'needs_human_review']
+    const show = ['case_id', 'user_id', 'amount', 'campaign_domain', 'emails_sent', 'clicked', 'sender_domain', 'risk_score', 'severity', 'verdict', 'confidence', 'recommended_action', 'campaign', 'linked_cases', 'compromised', 'exposure', 'needs_human_review']
       .filter((k) => ctx[k] != null && !(KIOSK && ['verdict', 'confidence', 'recommended_action', 'needs_human_review'].includes(k)));
     const label = (k) => (KIOSK ? LABELS[k] || k : k);
     const value = (k, v) => (KIOSK ? kioskValue(k, v) : Array.isArray(v) ? v.join(', ') : v);
@@ -2193,45 +2306,64 @@ function askHuman(node, ctx) {
     if (ctx.suspicious_transactions?.length) rows.push(`<dt>${KIOSK ? 'Suspicious payments' : 'suspicious transactions'}</dt><dd>${ctx.suspicious_transactions.map(esc).join('<br>')}</dd>`);
     if (ctx.rationale && !KIOSK) rows.push(`<dt>agent rationale</dt><dd>${esc(ctx.rationale)}</dd>`);
 
-    const callout = KIOSK && ctx.verdict
-      ? `<div class="callout"><b>AI recommendation:</b> ${esc(ctx.verdict === 'FRAUD' ? 'block the card, tell the customer and report it to the authorities' : 'release the payment')}
-         <span class="muted">(${Math.round((ctx.confidence || 0) * 100)}% confident)</span><br><span class="muted">${esc(ctx.rationale || '')}</span></div>`
+    // Every choice is an output: show where each one leads, and which one the AI would pick
+    const target = (port) => { const e = wf.edges.find((x) => x.from === node.id && x.fromPort === port); return e ? getNode(e.to).label : null; };
+    const choices = choicesOf(node);
+    const pick = aiPick(node, ctx);
+    const callout = pick
+      ? `<div class="callout"><b>AI recommendation:</b> ${esc(pick.label)}${target(pick.port) ? ` → ${esc(target(pick.port))}` : ''}
+         ${ctx.confidence != null ? `<span class="muted">(${Math.round(ctx.confidence * 100)}% confident)</span>` : ''}
+         ${ctx.rationale ? `<br><span class="muted">${esc(ctx.rationale)}</span>` : ''}</div>`
       : '';
+    const list = `<div class="choices" role="radiogroup" aria-label="Your finding">
+      <span class="choices-h">What did you find? <em>(required)</em></span>
+      ${choices.map((ch) => {
+        const to = target(ch.port);
+        return `<button type="button" class="choice" role="radio" aria-checked="false" data-port="${esc(ch.port)}" ${!to && KIOSK ? 'disabled' : ''}>
+          <span class="dot"></span>
+          <span class="cl">${esc(ch.label)}${pick?.port === ch.port ? ' <span class="ai-tag">AI’s pick</span>' : ''}</span>
+          <span class="ct">→ ${esc(to || 'not connected yet')}</span></button>`;
+      }).join('')}</div>`;
 
     $('#modalIcon').textContent = t.icon;
     $('#modalTitle').textContent = KIOSK ? `Your decision: ${node.label}` : node.label;
     $('#modalMeta').textContent = KIOSK ? `You are the ${c.role}. The AI has done the legwork; the decision is yours.` : `${c.role} · ${c.assignee} · SLA ${c.sla}`;
-    $('#modalBody').innerHTML = `${callout}<div class="instructions">${esc(c.instructions)}</div><dl class="kv">${rows.join('')}</dl>`;
-    $('#notesReq').textContent = c.requireNotes ? '(required)' : '(optional)';
+    // Evidence on the left; the AI's recommendation, the choices and the note on the right
+    const notesField = $('#modal .notes-field');
+    $('#modal .modal-card').insertBefore(notesField, $('#modalActions')); // keep it out of the body we're about to replace
+    $('#modalBody').innerHTML = `<div class="mb-grid">
+      <div class="mb-evidence"><div class="instructions">${esc(c.instructions)}</div><dl class="kv">${rows.join('')}</dl></div>
+      <div class="mb-decide">${callout}${list}</div></div>`;
+    $('#modalBody .mb-decide').append(notesField);
+    const notesRequired = !KIOSK && c.requireNotes;
+    $('#notesReq').textContent = notesRequired ? '(required)' : '(optional, up to 200 characters)';
     const notes = $('#modalNotes');
     notes.value = '';
+    const count = () => { $('#notesCount').textContent = notes.value.length ? `${notes.value.length} / 200` : ''; };
+    notes.oninput = count;
+    count();
 
-    // Kiosk: preset reasons instead of free text, so nothing a visitor types ends up on screen
-    let reason = '';
-    $('#modalReasons').innerHTML = `<span>Why? (optional)</span>${REASONS.map((r) => `<button type="button" class="chip">${esc(r)}</button>`).join('')}`;
-    $('#modalReasons').onclick = (ev) => {
-      const chip = ev.target.closest('.chip');
-      if (!chip) return;
-      const on = !chip.classList.contains('on');
-      $('#modalReasons').querySelectorAll('.chip').forEach((x) => x.classList.remove('on'));
-      chip.classList.toggle('on', on);
-      reason = on ? chip.textContent : '';
+    let chosen = null;
+    $('#modalActions').innerHTML = `${KIOSK ? '' : '<button class="btn" data-abort>Abort run</button>'}<span class="spacer"></span>
+      <button class="btn primary" data-confirm disabled>Confirm decision</button>`;
+    $('#modalBody').querySelector('.choices').onclick = (ev) => {
+      const b = ev.target.closest('.choice');
+      if (!b || b.disabled) return;
+      $('#modalBody').querySelectorAll('.choice').forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', String(x === b)); });
+      chosen = choices.find((ch) => ch.port === b.dataset.port);
+      $('#modalActions [data-confirm]').disabled = false;
     };
 
-    const names = KIOSK ? { approved: '✓ Approve', rejected: '✗ Reject: investigate further', out: '✓ Confirm & continue' } : { approved: 'Approve', rejected: 'Reject', out: 'Complete review' };
-    const actions = t.outputs.map((p, i) => `<button class="btn ${i === 0 ? 'approve' : 'reject'}" data-port="${p}">${names[p] || p[0].toUpperCase() + p.slice(1)}</button>`);
-    $('#modalActions').innerHTML = `${KIOSK ? '' : '<button class="btn" data-abort>Abort run</button>'}<span class="spacer"></span>${actions.join('')}`;
-
     modal.hidden = false;
-    if (!KIOSK) setTimeout(() => notes.focus(), 50);
+    $('.modal-card', modal).scrollTop = 0;
 
     $('#modalActions').onclick = (ev) => {
       const b = ev.target.closest('button');
       if (!b) return;
       if (b.hasAttribute('data-abort')) return finish(null);
-      if (KIOSK) return finish({ port: b.dataset.port, notes: reason });
-      if (c.requireNotes && !notes.value.trim()) { notes.focus(); return toast('Notes are required for this step.', true); }
-      finish({ port: b.dataset.port, notes: notes.value.trim() });
+      if (!chosen) return toast('Pick what you found first.', true);
+      if (notesRequired && !notes.value.trim()) { notes.focus(); return toast('Notes are required for this step.', true); }
+      finish({ port: chosen.port, choice: chosen.label, notes: notes.value.trim().slice(0, 200), agreed: pick ? pick.port === chosen.port : null });
     };
   });
 }
@@ -2253,7 +2385,9 @@ async function executeNode(node, ctx) {
   if (node.type === 'trigger') {
     log({ nodeId: node.id, msg: `Case ${ctx.case_id} opened from “${c.source}”.`, details: JSON.parse(c.payload || '{}') });
     narrate({ icon: '⚡', cat: 'control', title: `Case ${ctx.case_id} opened`,
-      text: ctx.sender_domain
+      text: ctx.campaign_domain
+        ? `Our email security spotted ${ctx.emails_sent?.toLocaleString('en-US') ?? 'many'} fake “${ctx.subject}” emails from ${ctx.campaign_domain}. Customer ${ctx.user_id} clicked the link ${ctx.clicked_at || 'recently'}.`
+        : ctx.sender_domain
         ? `Customer ${ctx.user_id} reported an email from “${ctx.sender_domain}”${ctx.subject ? `: “${ctx.subject}”` : ''}.`
         : ctx.amount ? `A ${money(ctx.amount)} payment by customer ${ctx.user_id} was flagged as unusual.` : `New alert from ${c.source}.` });
     return ['out'];
@@ -2316,11 +2450,14 @@ async function executeNode(node, ctx) {
   if (cat === 'human' && wf.aiAlone) {
     // "AI acts alone": the human check is skipped unless the verdict itself is unsure
     if (ctx.confidence == null || ctx.confidence >= 0.75) {
-      const port = NODE_TYPES[node.type].outputs[0];
+      const connected = outputsOf(node).filter((p) => wf.edges.some((e) => e.from === node.id && e.fromPort === p));
+      const pick = aiPick(node, ctx);
+      const port = pick && connected.includes(pick.port) ? pick.port : connected[0] || outputsOf(node)[0];
+      const choice = choicesOf(node).find((ch) => ch.port === port)?.label || port;
       ctx.ai_alone = true;
-      ctx.audit.push({ step: node.label, by: 'AI (no human)', decision: port, notes: '', at: new Date().toISOString() });
-      log({ kind: 'warn', nodeId: node.id, msg: `Skipped: the AI acted without a human check (${port}).` });
-      narrate({ icon: '🤖', kind: 'warn', title: `${node.label}: skipped`, text: 'The AI approved its own recommendation. No person checked it.' });
+      ctx.audit.push({ step: node.label, by: 'AI (no human)', decision: port, choice, notes: '', at: new Date().toISOString() });
+      log({ kind: 'warn', nodeId: node.id, msg: `Skipped: the AI acted without a human check (${choice}).` });
+      narrate({ icon: '🤖', kind: 'warn', title: `${node.label}: skipped`, text: `The AI chose “${choice}” on its own. No person checked it.` });
       return [port];
     }
     narrate({ icon: '⚠', kind: 'warn', title: 'Not sure enough to act alone', text: 'The AI’s verdict was below its confidence threshold, so it still asks a person.' });
@@ -2333,14 +2470,19 @@ async function executeNode(node, ctx) {
     narrate({ icon: '✋', cat: 'human', kind: 'you', title: `Your turn: ${node.label}`, text: `You are the ${c.role}. The AI only recommends; a person decides.` });
     const answer = await askHuman(node, ctx);
     if (!answer) { run.abort = true; return []; }
-    narrate({ icon: NODE_TYPES[node.type].icon, cat: 'human', title: `You chose: ${{ approved: 'Approve', rejected: 'Reject', out: 'Confirm' }[answer.port] || answer.port}`, text: answer.notes || '' });
+    narrate({ icon: NODE_TYPES[node.type].icon, cat: 'human', title: `You found: ${answer.choice}`, text: answer.notes ? `Your note: “${answer.notes}”` : '' });
+    if (answer.agreed != null) {
+      narrate(answer.agreed
+        ? { icon: '🤝', cat: 'human', title: 'You agreed with the AI', text: 'The AI recommended the same finding.' }
+        : { icon: '↩', kind: 'warn', title: 'You overrode the AI', text: 'In a real system this feedback helps the AI improve its future recommendations.' });
+    }
     setRunStatus('Running', 'running');
-    ctx.audit.push({ step: node.label, by: c.role, decision: answer.port, notes: answer.notes, at: new Date().toISOString() });
-    log({ kind: 'success', nodeId: node.id, msg: `${c.role} ${answer.port === 'out' ? 'completed review' : '→ ' + answer.port}${answer.notes ? ` — “${answer.notes}”` : ''}` });
+    ctx.audit.push({ step: node.label, by: c.role, decision: answer.port, choice: answer.choice, agreed: answer.agreed, notes: answer.notes, at: new Date().toISOString() });
+    log({ kind: 'success', nodeId: node.id, msg: `${c.role}: ${answer.choice}${answer.notes ? ` — “${answer.notes}”` : ''}` });
     return [answer.port];
   }
 
-  return NODE_TYPES[node.type].outputs;
+  return outputsOf(node);
 }
 
 async function runWorkflow() {
@@ -2627,11 +2769,14 @@ async function startScenario(name) {
   runWorkflow();
 }
 
+// Same layout as the Report Writer agent, for workflows that don't include one
+const caseSummary = (ctx) => simulateAgent({ label: 'Case summary', config: { role: 'summarizer' } }, ctx, {}).out.report;
+
 function showOutcome(ctx, startedAt) {
   const ran = (cat) => wf.nodes.filter((n) => catOf(n) === cat && nodeStatus[n.id] === 'done').length;
   const secs = Math.round((Date.now() - startedAt) / 1000);
   const atRisk = ctx.exposure ?? ctx.amount;
-  const released = ctx.outcome === 'Close – no action';
+  const released = ['Close – no action', 'Release payment'].includes(ctx.outcome);
   const people = ctx.audit.filter((a) => a.by !== 'AI (no human)');
   const stat = (c, v, l) => `<div class="stat" style="--c:var(--${c})"><b>${esc(v)}</b><span>${esc(l)}</span></div>`;
   $('#outcomeBody').innerHTML = `
@@ -2639,7 +2784,9 @@ function showOutcome(ctx, startedAt) {
     <h2 id="outcomeTitle">${esc(plainOutcome(ctx.outcome || 'Case closed'))}</h2>
     ${!ctx.verdict && ctx.risk_score != null ? `<p class="verdict-line">AI risk score: <b>${ctx.risk_score} / 100 (${esc(ctx.severity || '')})</b>${released ? ' · cleared automatically, no analyst time needed' : ''}</p>` : ''}
     ${ctx.ai_alone ? '<p class="verdict-line warn-line">⚠ The AI acted on its own: no person checked this decision.</p>' : ''}
-    ${ctx.verdict ? `<p class="verdict-line">AI verdict: <b>${ctx.verdict === 'FRAUD' ? 'likely fraud' : 'looks genuine'}</b> (${Math.round((ctx.confidence || 0) * 100)}% confident)${people.length ? ` · your decision: <b>${esc(people.map((a) => ({ approved: 'approve', rejected: 'reject', out: 'confirm' }[a.decision] || a.decision)).join(', then '))}</b>` : ''}</p>` : ''}
+    ${ctx.verdict ? `<p class="verdict-line">AI verdict: <b>${ctx.verdict === 'FRAUD' ? 'likely fraud' : 'looks genuine'}</b> (${Math.round((ctx.confidence || 0) * 100)}% confident)</p>` : ''}
+    ${people.length ? `<p class="verdict-line">Your finding: <b>${esc(people.map((a) => a.choice || a.decision).join(', then '))}</b>${people.some((a) => a.agreed === false) ? ' · <span class="warn-line">you overrode the AI</span>' : people.some((a) => a.agreed) ? ' · you agreed with the AI' : ''}</p>` : ''}
+    ${people.some((a) => a.notes) ? `<p class="verdict-line muted">Your note: “${esc(people.filter((a) => a.notes).map((a) => a.notes).join(' / '))}”</p>` : ''}
     <div class="result-stats">
       ${stat('accent', secs + 's', 'Investigation time')}
       ${stat('data', ran('data'), 'Data sources checked')}
@@ -2647,7 +2794,7 @@ function showOutcome(ctx, startedAt) {
       ${stat('human', people.length, 'Human decisions')}
       ${atRisk != null ? stat('warn', money(atRisk), released ? 'Payment released' : 'Money at risk') : ''}
     </div>
-    ${ctx.report ? `<details class="report-box"><summary>Read the AI-written case report</summary><pre class="mono">${esc(ctx.report)}</pre></details>` : ''}`;
+    <details class="report-box"><summary>${ctx.report ? 'Read the AI-written case report' : 'Read the case summary'}</summary><pre class="mono">${esc(ctx.report || caseSummary(ctx))}</pre></details>`;
   const other = NEXT_SCENARIO[scenario] || 'fraud';
   $('#btnOther').textContent = `Try: ${SCENARIO_NAMES[other]} ▶`;
   $('#btnOther').onclick = () => startScenario(other);
