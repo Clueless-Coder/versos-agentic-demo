@@ -755,7 +755,7 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
       <div class="scenarios">
         <button class="scenario" data-scenario="fraud">
           <span class="ic">💳</span><b>Suspicious card payment</b>
-          <span>A SAR 4,500 payment from a customer who normally spends about SAR 120 a month.</span>
+          <span>A SAR 17,000 payment from a Riyadh customer who normally spends about SAR 1,500 a month.</span>
           <span class="go">Start investigation ▶</span>
         </button>
         <button class="scenario" data-scenario="ato">
@@ -765,7 +765,7 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
         </button>
         <button class="scenario" data-scenario="legit">
           <span class="ic">🧳</span><b>Unusual payment abroad</b>
-          <span>A SAR 850 purchase in Lisbon. Fraud, or just a customer on holiday?</span>
+          <span>A SAR 3,200 purchase in Lisbon from a Saudi customer. Fraud, or just a holiday?</span>
           <span class="go">Start investigation ▶</span>
         </button>
         <button class="scenario build" data-scenario="build">
@@ -849,7 +849,7 @@ const NODE_TYPES = {
   trigger: {
     category: 'control', title: 'Case Trigger', icon: '⚡', inputs: false, outputs: ['out'],
     desc: 'Starts a run from an alert or case',
-    defaults: { source: 'Fraud alert queue', payload: '{\n  "user_id": "usr_99823",\n  "amount": 4500,\n  "ip_address": "185.23.4.11"\n}' },
+    defaults: { source: 'Fraud alert queue', payload: '{\n  "user_id": "usr_99823",\n  "amount": 17000,\n  "ip_address": "185.23.4.11"\n}' },
   },
   decision: {
     category: 'control', title: 'Decision', icon: '◆', inputs: true, outputs: ['yes', 'no'],
@@ -1048,6 +1048,8 @@ const LABELS = {
 const SCENARIO_NAMES = { fraud: 'Suspicious card payment', ato: 'Phishing campaign & account takeover', legit: 'Unusual payment abroad', build: 'Build your own' };
 const NEXT_SCENARIO = { fraud: 'ato', ato: 'legit', legit: 'build', build: 'fraud' };
 // Saudi riyal, written as "SAR" (the new riyal sign isn't in most fonts yet)
+const COUNTRIES = { SA: 'Saudi Arabia', RO: 'Romania', PT: 'Portugal', US: 'United States' };
+const country = (code) => COUNTRIES[code] || code;
 const money = (v) => 'SAR ' + Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 });
 // Outcomes state only the immediate action, never what might happen after it
 const plainOutcome = (o) => ({
@@ -1158,7 +1160,7 @@ function buildTemplate(name) {
       name: 'Unusual payment abroad',
       description: 'A big payment from another country turns out to be the customer on holiday. The agents clear it and close the case without taking up an analyst’s time.',
       nodes: [
-        n('t1', 'trigger', 40, 300, 'Unusual payment alert', { payload: '{\n  "user_id": "usr_40217",\n  "amount": 850,\n  "merchant": "Electronics store, Lisbon",\n  "country": "PT",\n  "travel_notice": "PT"\n}' }),
+        n('t1', 'trigger', 40, 300, 'Unusual payment alert', { payload: '{\n  "user_id": "usr_40217",\n  "amount": 3200,\n  "merchant": "Electronics store, Lisbon",\n  "country": "PT",\n  "travel_notice": "PT"\n}' }),
         n('d1', 'ds_transactions', 300, 60),
         n('d2', 'ds_customer', 540, 60),
         n('a1', 'agent_triage', 300, 300),
@@ -2143,14 +2145,14 @@ const round2 = (v) => Math.round(v * 100) / 100;
 function mockFetch(node, ctx) {
   switch (node.type) {
     case 'ds_transactions': return {
-      rows: 37, avg_monthly_spend: 120, max_single_txn: 310, countries: ['US'], last_txn: '2026-10-11',
+      rows: 37, avg_monthly_spend: 1500, max_single_txn: 1200, countries: ['SA'], last_txn: '2026-10-11',
       recent: [
-        { ts: '2026-10-11 02:14', amount: 1850, payee: 'J. Marin (new payee, RO)', channel: 'online transfer', new_payee: true },
-        { ts: '2026-10-11 02:31', amount: 975, payee: 'CryptoXchange Ltd (new payee)', channel: 'card', new_payee: true },
-        { ts: '2026-10-09 12:05', amount: 42.5, payee: 'Grocery Mart', channel: 'card', new_payee: false },
+        { ts: '2026-10-11 02:14', amount: 6900, payee: 'J. Marin (new payee, Romania)', channel: 'online transfer', new_payee: true },
+        { ts: '2026-10-11 02:31', amount: 3650, payee: 'CryptoXchange Ltd (new payee)', channel: 'card', new_payee: true },
+        { ts: '2026-10-09 12:05', amount: 160, payee: 'Grocery store, Riyadh', channel: 'card', new_payee: false },
       ],
     };
-    case 'ds_customer': return { home_country: 'US', tenure_years: 6, kyc_level: 'full', prior_disputes: 0, travel_notice: ctx.travel_notice || null };
+    case 'ds_customer': return { home_country: 'SA', home_city: 'Riyadh', tenure_years: 6, kyc_level: 'full', prior_disputes: 0, travel_notice: ctx.travel_notice || null };
     case 'ds_ipgeo': return { ip: ctx.ip_address || 'n/a', country: 'RO', asn: 'AS9009 M247 Ltd', is_vpn: true, risk: 'high' };
     case 'ds_device': return { device_id: 'fp_7c21e9', first_seen: 'today', emulator: false, shared_accounts: 3 };
     case 'ds_siem': return { failed_logins_7d: 14, new_src_ips: 3, mfa_resets: 1, impossible_travel: true };
@@ -2177,7 +2179,7 @@ function simulateAgent(node, ctx, data) {
       const amt = Number(ctx.amount) || 0;
       const hist = pick('avg_monthly_spend');
       const drivers = [];
-      let score = 25 + Math.min(40, amt / 100);
+      let score = 25 + Math.min(40, amt / 375); // SAR 375 per point
       if (amt) drivers.push(`amount ${amt}`);
       if (hist && amt > hist.avg_monthly_spend * 10) { score += 15; drivers.push(`${Math.round(amt / hist.avg_monthly_spend)}× normal monthly spend`); }
       const domain = ctx.campaign_domain || ctx.sender_domain;
@@ -2185,7 +2187,7 @@ function simulateAgent(node, ctx, data) {
       if (ctx.clicked) { score += 5; drivers.push(`${ctx.clicked} customers clicked the link`); }
       if (pick('credential_form')) { score += 15; drivers.push('credential-harvesting form'); }
       if (pick('matches')?.matches) { score += 10; drivers.push('threat intel match'); }
-      if (pick('travel_notice')?.travel_notice) { score -= 15; drivers.push(`customer told the bank they are travelling (${pick('travel_notice').travel_notice})`); }
+      if (pick('travel_notice')?.travel_notice) { score -= 15; drivers.push(`customer told the bank they are travelling (${country(pick('travel_notice').travel_notice)})`); }
       score = clamp(Math.round(score + rnd(-4, 4)), 0, 100);
       out = { risk_score: score, severity: score >= 70 ? 'high' : score >= 40 ? 'medium' : 'low' };
       msg = `Risk ${score}/100 (${out.severity}). Drivers: ${drivers.join(', ') || 'none notable'}.`;
@@ -2195,9 +2197,9 @@ function simulateAgent(node, ctx, data) {
     case 'enrichment': {
       const anomalies = [];
       const ip = pick('is_vpn'), cust = pick('home_country'), dev = pick('shared_accounts'), siem = pick('failed_logins_7d');
-      if (ip?.is_vpn) anomalies.push(`IP is a VPN / data-centre address (${ip.asn}) in ${ip.country}`);
-      if (ip && cust && ip.country !== cust.home_country) anomalies.push(`Geo mismatch: ${ip.country} vs home ${cust.home_country}`);
-      if (ip && !cust && ip.country !== 'US') anomalies.push(`Transaction from unusual country ${ip.country}`);
+      if (ip?.is_vpn) anomalies.push(`IP is a VPN / data-centre address (${ip.asn}) in ${country(ip.country)}`);
+      if (ip && cust && ip.country !== cust.home_country) anomalies.push(`Location mismatch: ${country(ip.country)} vs home ${country(cust.home_country)}`);
+      if (ip && !cust && ip.country !== 'SA') anomalies.push(`Transaction from unusual country: ${country(ip.country)}`);
       if (dev?.shared_accounts > 1) anomalies.push(`Device shared across ${dev.shared_accounts} accounts`);
       if (dev?.first_seen === 'today') anomalies.push('Device first seen today');
       if (siem?.failed_logins_7d > 5) anomalies.push(`${siem.failed_logins_7d} failed logins in 7 days`);
