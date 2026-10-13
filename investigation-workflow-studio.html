@@ -966,7 +966,7 @@ const NODE_TYPES = {
   },
 };
 
-const OUTCOMES = ['Close – no action', 'Close – confirmed fraud', 'Block account & refund', 'Block card, refund & report', 'Release payment', 'Contain & reset credentials', 'Reset password only', 'Hold & escalate', 'Hold payment & text customer', 'File SAR', 'Refer to compliance', 'Refer to law enforcement'];
+const OUTCOMES = ['Close – no action', 'Close – confirmed fraud', 'Block account & refund', 'Block card, refund & report', 'Release payment', 'Contain & reset credentials', 'Reset password only', 'Close – no takeover', 'Hold & escalate', 'Hold payment & text customer', 'File SAR', 'Refer to compliance', 'Refer to law enforcement'];
 
 // A node's outputs: its choices for human steps, otherwise the type's fixed outputs
 const choicesOf = (node) => node.config?.choices?.length ? node.config.choices : NODE_TYPES[node.type].outputs.map((p) => ({ port: p, short: p, label: p[0].toUpperCase() + p.slice(1) }));
@@ -1064,7 +1064,7 @@ const plainOutcome = (o) => ({
   'File SAR': 'Block card & report to the authorities', 'Refer to compliance': 'Passed to the compliance team',
   'Close – no action': 'Closed: no fraud found', 'Contain & reset credentials': 'Account contained, password reset & payments recalled',
   'Block card, refund & report': 'Card blocked, customer refunded & reported to the authorities', 'Release payment': 'Payment released, case closed',
-  'Reset password only': 'Password reset; the payments stay', 'Hold & escalate': 'Outgoing payments on hold; escalated to a senior investigator',
+  'Reset password only': 'Password reset; the payments stay', 'Close – no takeover': 'Closed: no takeover found', 'Hold & escalate': 'Outgoing payments on hold; escalated to a senior investigator',
   'Hold payment & text customer': 'Payment on hold; customer texted to confirm',
   'Close – confirmed fraud': 'Closed: fraud confirmed', 'Block account & refund': 'Account blocked & customer refunded',
   'Refer to law enforcement': 'Passed to the police',
@@ -1148,7 +1148,7 @@ function buildTemplate(name) {
         }),
         n('o1', 'end', 1420, 0, 'Contain account & recall payments', { outcome: 'Contain & reset credentials', notify: '#soc-incidents' }),
         n('o2', 'end', 1420, 130, 'Reset password only', { outcome: 'Reset password only' }),
-        n('o3', 'end', 1420, 260, 'No takeover: close', { outcome: 'Close – no action' }),
+        n('o3', 'end', 1420, 260, 'No takeover: close', { outcome: 'Close – no takeover' }),
         n('o4', 'end', 1420, 390, 'Hold payments & escalate', { outcome: 'Hold & escalate' }),
         n('a3', 'agent_summarizer', 840, 480, 'Auto-close summary'),
         n('o5', 'end', 1110, 480, 'Benign: close', { outcome: 'Close – no action' }),
@@ -2792,7 +2792,7 @@ function showOutcome(ctx, startedAt) {
       ${stat('data', ran('data'), 'Data sources checked')}
       ${stat('agent', ran('agent'), 'AI agents used')}
       ${stat('human', people.length, 'Human decisions')}
-      ${atRisk != null ? stat('warn', money(atRisk), released ? 'Payment released' : 'Money at risk') : ''}
+      ${atRisk != null ? stat('warn', money(atRisk), ctx.outcome === 'Close – no takeover' ? 'Payments confirmed genuine' : released ? 'Payment released' : 'Money at risk') : ''}
     </div>
     <details class="report-box"><summary>${ctx.report ? 'Read the AI-written case report' : 'Read the case summary'}</summary><pre class="mono">${esc(ctx.report || caseSummary(ctx))}</pre></details>`;
   const other = NEXT_SCENARIO[scenario] || 'fraud';
