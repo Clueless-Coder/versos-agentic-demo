@@ -579,7 +579,7 @@ body.kiosk .btn { padding: 0.5em 1.1em; }
   cursor: pointer; transition: border-color .15s, transform .15s;
 }
 .scenario:hover { border-color: var(--accent); transform: translateY(-2px); }
-.scenario.build { border-style: dashed; border-color: var(--accent); }
+.scenario.build { border-style: dashed; border-color: var(--accent); grid-column: 1 / -1; }
 .scenario .ic { font-size: 1.7em; }
 .scenario b { font-size: 1.2em; }
 .scenario span { color: var(--muted); }
@@ -677,7 +677,6 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
       <select id="templateSelect" class="studio-only" aria-label="Load template">
         <option value="">Templates…</option>
         <option value="fraud">Card fraud investigation</option>
-        <option value="ato">Phishing campaign / account takeover</option>
         <option value="legit">Unusual payment abroad (genuine)</option>
         <option value="blank">Blank workflow</option>
       </select>
@@ -790,16 +789,6 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
             <span class="vchip" role="button" data-variant="high">SAR 17,000 via VPN · high</span>
             <span class="vchip" role="button" data-variant="medium">SAR 10,500 online · medium</span>
             <span class="vchip" role="button" data-variant="low">SAR 1,900 local · low</span>
-          </span>
-          <span class="go">Start investigation ▶</span>
-        </button>
-        <button class="scenario" data-scenario="ato">
-          <span class="ic">🎣</span><b>Phishing campaign &amp; account takeover</b>
-          <span>Our system catches a fake “password expires” campaign. How early did it catch it?</span>
-          <span class="vchips">
-            <span class="vchip" role="button" data-variant="high">37 clicked · break-in signs</span>
-            <span class="vchip" role="button" data-variant="medium">3 clicked · caught in 18 min</span>
-            <span class="vchip" role="button" data-variant="low">nobody clicked · blocked</span>
           </span>
           <span class="go">Start investigation ▶</span>
         </button>
@@ -1106,19 +1095,14 @@ const VARIANTS = {
     { id: 'medium', payload: { user_id: 'usr_55102', amount: 10500, merchant: 'Online electronics store, Riyadh', known_device: true } },
     { id: 'low', payload: { user_id: 'usr_23870', amount: 1900, merchant: 'Furniture store, Riyadh', known_device: true } },
   ],
-  ato: [
-    { id: 'high', payload: { campaign_domain: 'yourbank-secure-login.example', subject: 'Your password expires today', emails_sent: 1240, clicked: 37, user_id: 'usr_31877', clicked_at: '2 hours ago' } },
-    { id: 'medium', payload: { campaign_domain: 'yourbank-secure-login.example', subject: 'Your password expires today', emails_sent: 1240, clicked: 3, quarantined: '18 minutes after delivery', no_new_logins: true } },
-    { id: 'low', payload: { campaign_domain: 'yourbank-secure-login.example', subject: 'Your password expires today', emails_sent: 1240, clicked: 0, quarantined: 'before delivery' } },
-  ],
   legit: [
     { id: 'travelling', payload: { user_id: 'usr_40217', amount: 3200, merchant: 'Electronics store, Lisbon', country: 'PT', travel_notice: 'PT' } },
     { id: 'nonotice', payload: { user_id: 'usr_77031', amount: 16500, merchant: 'Jewellery store, Lisbon', country: 'PT', known_device: true } },
   ],
 };
 
-const SCENARIO_NAMES = { fraud: 'Suspicious card payment', ato: 'Phishing campaign & account takeover', legit: 'Unusual payment abroad', build: 'Build your own' };
-const NEXT_SCENARIO = { fraud: 'ato', ato: 'legit', legit: 'build', build: 'fraud' };
+const SCENARIO_NAMES = { fraud: 'Suspicious card payment', legit: 'Unusual payment abroad', build: 'Build your own' };
+const NEXT_SCENARIO = { fraud: 'legit', legit: 'build', build: 'fraud' };
 // Saudi riyal, written as "SAR" (the new riyal sign isn't in most fonts yet)
 const COUNTRIES = { SA: 'Saudi Arabia', RO: 'Romania', PT: 'Portugal', US: 'United States' };
 const country = (code) => COUNTRIES[code] || code;
@@ -1194,60 +1178,6 @@ function buildTemplate(name) {
         e('h2', 'o4', 'fraud'), e('h2', 'o5', 'genuine'), e('h2', 'o6', 'refer'),
         e('h3', 'o8', 'fraud'), e('h3', 'o9', 'genuine'), e('h3', 'h2', 'unclear'),
         e('a4', 'o7'),
-      ],
-    };
-  }
-
-  if (name === 'ato') {
-    return {
-      name: 'Phishing campaign & account takeover',
-      description: 'Our system detects a phishing campaign impersonating the bank and checks whether any customer who clicked was broken into. The earlier it catches it, the less is left to do.',
-      nodes: [
-        n('t1', 'trigger', 40, 300, 'Phishing campaign detected', { source: 'Email security (automatic detection)', payload: '{\n  "campaign_domain": "yourbank-secure-login.example",\n  "subject": "Your password expires today",\n  "emails_sent": 1240,\n  "clicked": 37,\n  "user_id": "usr_31877",\n  "clicked_at": "2 hours ago"\n}' }),
-        n('d1', 'ds_documents', 300, 60, 'Email security logs'),
-        n('d2', 'ds_threatintel', 540, 60),
-        n('a1', 'agent_triage', 300, 300, 'Phishing triage', { systemPrompt: 'Analyse the detected campaign: look-alike domains, links, urgency, impersonation and who clicked. Score risk 0-100.' }),
-        n('c1', 'band', 580, 300, 'Risk bands'),
-        n('d3', 'ds_siem', 840, 60, 'Sign-in logs'),
-        n('d4', 'ds_transactions', 1080, 60, 'Account transactions', { query: "SELECT * FROM transactions\nWHERE user_id = :user_id\n  AND ts > now() - interval '7 days'\nORDER BY ts DESC" }),
-        n('a2', 'agent_correlation', 840, 220, 'Account check', { systemPrompt: 'For customers who clicked, search sign-in logs for logins from new devices or places after the click, and review recent transactions for payments or payee changes made after those logins.', outputs: 'linked_cases, campaign, compromised, suspicious_transactions' }),
-        n('h1', 'human_review', 1110, 200, 'Fraud analyst review', {
-          role: 'Fraud Analyst', sla: '1h',
-          instructions: 'The account check found a login from a new device right after the click, then payments to new payees. Contact the customer and record what you found: each finding leads to a different outcome.',
-          choices: [
-            { port: 'not_them', short: 'not them', label: 'Customer didn’t log in or make the payments', ai: 'fraud' },
-            { port: 'clicked_only', short: 'clicked only', label: 'Customer clicked the link, but the payments were theirs' },
-            { port: 'genuine', short: 'all genuine', label: 'Customer says the logins and payments were all theirs', ai: 'genuine' },
-            { port: 'unreachable', short: 'no reply', label: 'Can’t reach the customer' },
-          ],
-        }),
-        n('o1', 'end', 1420, 0, 'Account secured', { outcome: 'Contain & reset credentials', notify: '#soc-incidents' }),
-        n('o2', 'end', 1420, 130, 'Password reset', { outcome: 'Reset password only' }),
-        n('o3', 'end', 1420, 260, 'No takeover: close', { outcome: 'Close – no takeover' }),
-        n('o4', 'end', 1420, 390, 'Hold payments & escalate', { outcome: 'Hold & escalate' }),
-        n('h2', 'human_review', 840, 400, 'SOC analyst review', {
-          role: 'SOC Analyst', sla: '30m',
-          instructions: 'The campaign was quarantined quickly, so the AI scored this medium risk. Decide what to do for the customers who clicked.',
-          choices: [
-            { port: 'reset', short: 'reset', label: 'Reset passwords for the customers who clicked, as a precaution', ai: 'any' },
-            { port: 'monitor', short: 'monitor', label: 'No sign any account was touched — keep monitoring' },
-            { port: 'unclear', short: 'escalate', label: 'Can’t tell yet — escalate' },
-          ],
-        }),
-        n('o6', 'end', 1150, 340, 'Passwords reset', { outcome: 'Reset password only' }),
-        n('o7', 'end', 1150, 470, 'No takeover: close', { outcome: 'Close – no takeover' }),
-        n('o8', 'end', 1150, 600, 'Escalated', { outcome: 'Escalate – senior investigator' }),
-        n('a3', 'agent_summarizer', 860, 740, 'Auto-close summary'),
-        n('o5', 'end', 1140, 740, 'Campaign blocked', { outcome: 'Close – campaign blocked' }),
-      ],
-      edges: [
-        e('t1', 'a1'), e('d1', 'a1', 'data'), e('d2', 'a1', 'data'), e('a1', 'c1'),
-        e('c1', 'a2', 'high'), e('c1', 'h2', 'medium'), e('c1', 'a3', 'low'),
-        e('d3', 'a2', 'data'), e('d2', 'a2', 'data'), e('d4', 'a2', 'data'),
-        e('a2', 'h1'),
-        e('h1', 'o1', 'not_them'), e('h1', 'o2', 'clicked_only'), e('h1', 'o3', 'genuine'), e('h1', 'o4', 'unreachable'),
-        e('h2', 'o6', 'reset'), e('h2', 'o7', 'monitor'), e('h2', 'o8', 'unclear'),
-        e('a3', 'o5'),
       ],
     };
   }
