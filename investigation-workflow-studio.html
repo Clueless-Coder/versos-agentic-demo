@@ -546,6 +546,13 @@ body.kiosk .btn { padding: 0.5em 1.1em; }
 .story-empty { color: var(--muted); text-align: center; padding: 2em 0.5em; }
 .story-foot { padding-top: 0.6em; font-size: 0.78em; color: var(--muted); border-top: 1px solid var(--border); margin-top: 0.4em; }
 
+.think-bubble {
+  position: absolute; z-index: 4; transform: translateY(-100%); pointer-events: none; white-space: nowrap;
+  background: var(--panel); border: 1px solid var(--agent); color: var(--text);
+  border-radius: 10px; padding: 5px 10px; font-size: 12px; box-shadow: 0 4px 14px var(--shadow);
+  animation: beat-in .3s ease-out;
+}
+
 /* Welcome + outcome overlays */
 .overlay-card {
   width: min(90%, 62em); max-height: 92vh; overflow-y: auto;
@@ -591,6 +598,14 @@ body.kiosk .btn { padding: 0.5em 1.1em; }
 .warn-line { color: var(--warn); }
 .report-box { text-align: left; margin: 0 0 1.2em; }
 .report-box pre { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.8em; font-size: 0.85em; max-height: 30vh; overflow: auto; }
+.compare { margin: 0 0 1.2em; }
+.compare h3 { font-size: 1.05em; margin: 0 0 0.4em; }
+.compare table { width: 100%; border-collapse: collapse; font-size: 0.92em; text-align: left; }
+.compare th, .compare td { padding: 0.35em 0.7em; border-bottom: 1px solid var(--border); }
+.compare th { color: var(--muted); font-weight: 500; }
+.compare td:first-child { color: var(--muted); white-space: nowrap; }
+.compare tr.diff td { font-weight: 600; }
+.compare tr.diff td:first-child { font-weight: 400; }
 .overlay-actions { display: flex; gap: 0.8em; justify-content: center; margin-bottom: 1em; }
 .overlay-actions .btn { font-size: 1.05em; padding: 0.6em 1.4em; }
 
@@ -680,6 +695,7 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
         <option value="fast">Speed: Fast</option>
       </select>
       <button id="btnRestart" class="btn kiosk-only">↺ Start over</button>
+      <button id="btnSound" class="btn theme-btn kiosk-only" aria-pressed="false" title="Turn sound on" aria-label="Turn sound on">🔇</button>
       <button id="btnTheme" class="btn theme-btn" data-theme-toggle title="Switch to dark theme" aria-label="Switch to dark theme">☾</button>
     </div>
   </header>
@@ -779,7 +795,12 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
         </button>
         <button class="scenario" data-scenario="ato">
           <span class="ic">🎣</span><b>Phishing campaign &amp; account takeover</b>
-          <span>Our system catches a fake “your password expires today” campaign and finds a customer who clicked. Did the criminals get in?</span>
+          <span>Our system catches a fake “password expires” campaign. How early did it catch it?</span>
+          <span class="vchips">
+            <span class="vchip" role="button" data-variant="high">37 clicked · break-in signs</span>
+            <span class="vchip" role="button" data-variant="medium">3 clicked · caught in 18 min</span>
+            <span class="vchip" role="button" data-variant="low">nobody clicked · blocked</span>
+          </span>
           <span class="go">Start investigation ▶</span>
         </button>
         <button class="scenario" data-scenario="legit">
@@ -982,7 +1003,7 @@ const NODE_TYPES = {
   },
 };
 
-const OUTCOMES = ['Close – no action', 'Close – confirmed fraud', 'Block card', 'Block card – known scam', 'Block account', 'Release payment', 'Contain & reset credentials', 'Reset password only', 'Close – no takeover', 'Hold & escalate', 'Hold payment & text customer', 'File SAR', 'Refer to compliance'];
+const OUTCOMES = ['Close – no action', 'Close – confirmed fraud', 'Block card', 'Block card – known scam', 'Block account', 'Release payment', 'Contain & reset credentials', 'Reset password only', 'Close – no takeover', 'Close – campaign blocked', 'Escalate – senior investigator', 'Hold & escalate', 'Hold payment & text customer', 'File SAR', 'Refer to compliance'];
 
 // A node's outputs: its choices for human steps, otherwise the type's fixed outputs
 const choicesOf = (node) => node.config?.choices?.length ? node.config.choices : NODE_TYPES[node.type].outputs.map((p) => ({ port: p, short: p, label: p[0].toUpperCase() + p.slice(1) }));
@@ -1073,7 +1094,7 @@ const ROLE_OF = {
 };
 const LABELS = {
   case_id: 'Case', user_id: 'Customer', amount: 'Amount', sender_domain: 'Email sent from', campaign_domain: 'Phishing domain',
-  emails_sent: 'Fake emails sent', clicked: 'Customers who clicked', risk_score: 'Risk score',
+  emails_sent: 'Fake emails sent', clicked: 'Customers who clicked', quarantined: 'Quarantined', risk_score: 'Risk score',
   severity: 'Severity', verdict: 'AI verdict', confidence: 'AI confidence', recommended_action: 'AI recommends',
   campaign: 'Scam campaign', linked_cases: 'Linked cases', compromised: 'Account taken over?', exposure: 'Money at risk',
   needs_human_review: 'Flagged for review',
@@ -1084,6 +1105,11 @@ const VARIANTS = {
     { id: 'high', payload: { user_id: 'usr_99823', amount: 17000, ip_address: '185.23.4.11' } },
     { id: 'medium', payload: { user_id: 'usr_55102', amount: 10500, merchant: 'Online electronics store, Riyadh', known_device: true } },
     { id: 'low', payload: { user_id: 'usr_23870', amount: 1900, merchant: 'Furniture store, Riyadh', known_device: true } },
+  ],
+  ato: [
+    { id: 'high', payload: { campaign_domain: 'yourbank-secure-login.example', subject: 'Your password expires today', emails_sent: 1240, clicked: 37, user_id: 'usr_31877', clicked_at: '2 hours ago' } },
+    { id: 'medium', payload: { campaign_domain: 'yourbank-secure-login.example', subject: 'Your password expires today', emails_sent: 1240, clicked: 3, quarantined: '18 minutes after delivery', no_new_logins: true } },
+    { id: 'low', payload: { campaign_domain: 'yourbank-secure-login.example', subject: 'Your password expires today', emails_sent: 1240, clicked: 0, quarantined: 'before delivery' } },
   ],
   legit: [
     { id: 'travelling', payload: { user_id: 'usr_40217', amount: 3200, merchant: 'Electronics store, Lisbon', country: 'PT', travel_notice: 'PT' } },
@@ -1104,6 +1130,7 @@ const plainOutcome = (o) => ({
   'Close – no action': 'Closed: no fraud found', 'Close – confirmed fraud': 'Closed: fraud confirmed',
   'Contain & reset credentials': 'Account secured', 'Release payment': 'Payment released, case closed',
   'Reset password only': 'Password reset', 'Close – no takeover': 'Closed: no takeover found',
+  'Close – campaign blocked': 'Campaign blocked; no customers affected', 'Escalate – senior investigator': 'Escalated to a senior investigator',
   'Hold & escalate': 'Outgoing payments on hold; escalated to a senior investigator', 'Hold payment & text customer': 'Payment on hold',
 }[o] || o);
 
@@ -1174,13 +1201,13 @@ function buildTemplate(name) {
   if (name === 'ato') {
     return {
       name: 'Phishing campaign & account takeover',
-      description: 'Our system detects a phishing campaign impersonating the bank, finds a customer who clicked, and checks whether criminals got into the account.',
+      description: 'Our system detects a phishing campaign impersonating the bank and checks whether any customer who clicked was broken into. The earlier it catches it, the less is left to do.',
       nodes: [
         n('t1', 'trigger', 40, 300, 'Phishing campaign detected', { source: 'Email security (automatic detection)', payload: '{\n  "campaign_domain": "yourbank-secure-login.example",\n  "subject": "Your password expires today",\n  "emails_sent": 1240,\n  "clicked": 37,\n  "user_id": "usr_31877",\n  "clicked_at": "2 hours ago"\n}' }),
         n('d1', 'ds_documents', 300, 60, 'Email security logs'),
         n('d2', 'ds_threatintel', 540, 60),
         n('a1', 'agent_triage', 300, 300, 'Phishing triage', { systemPrompt: 'Analyse the detected campaign: look-alike domains, links, urgency, impersonation and who clicked. Score risk 0-100.' }),
-        n('c1', 'decision', 580, 300, 'High risk?', { condition: 'ctx.risk_score >= 60' }),
+        n('c1', 'band', 580, 300, 'Risk bands'),
         n('d3', 'ds_siem', 840, 60, 'Sign-in logs'),
         n('d4', 'ds_transactions', 1080, 60, 'Account transactions', { query: "SELECT * FROM transactions\nWHERE user_id = :user_id\n  AND ts > now() - interval '7 days'\nORDER BY ts DESC" }),
         n('a2', 'agent_correlation', 840, 220, 'Account check', { systemPrompt: 'For customers who clicked, search sign-in logs for logins from new devices or places after the click, and review recent transactions for payments or payee changes made after those logins.', outputs: 'linked_cases, campaign, compromised, suspicious_transactions' }),
@@ -1198,15 +1225,28 @@ function buildTemplate(name) {
         n('o2', 'end', 1420, 130, 'Password reset', { outcome: 'Reset password only' }),
         n('o3', 'end', 1420, 260, 'No takeover: close', { outcome: 'Close – no takeover' }),
         n('o4', 'end', 1420, 390, 'Hold payments & escalate', { outcome: 'Hold & escalate' }),
-        n('a3', 'agent_summarizer', 840, 480, 'Auto-close summary'),
-        n('o5', 'end', 1110, 480, 'Benign: close', { outcome: 'Close – no action' }),
+        n('h2', 'human_review', 840, 400, 'SOC analyst review', {
+          role: 'SOC Analyst', sla: '30m',
+          instructions: 'The campaign was quarantined quickly, so the AI scored this medium risk. Decide what to do for the customers who clicked.',
+          choices: [
+            { port: 'reset', short: 'reset', label: 'Reset passwords for the customers who clicked, as a precaution', ai: 'any' },
+            { port: 'monitor', short: 'monitor', label: 'No sign any account was touched — keep monitoring' },
+            { port: 'unclear', short: 'escalate', label: 'Can’t tell yet — escalate' },
+          ],
+        }),
+        n('o6', 'end', 1150, 340, 'Passwords reset', { outcome: 'Reset password only' }),
+        n('o7', 'end', 1150, 470, 'No takeover: close', { outcome: 'Close – no takeover' }),
+        n('o8', 'end', 1150, 600, 'Escalated', { outcome: 'Escalate – senior investigator' }),
+        n('a3', 'agent_summarizer', 860, 740, 'Auto-close summary'),
+        n('o5', 'end', 1140, 740, 'Campaign blocked', { outcome: 'Close – campaign blocked' }),
       ],
       edges: [
         e('t1', 'a1'), e('d1', 'a1', 'data'), e('d2', 'a1', 'data'), e('a1', 'c1'),
-        e('c1', 'a2', 'yes'), e('c1', 'a3', 'no'),
+        e('c1', 'a2', 'high'), e('c1', 'h2', 'medium'), e('c1', 'a3', 'low'),
         e('d3', 'a2', 'data'), e('d2', 'a2', 'data'), e('d4', 'a2', 'data'),
         e('a2', 'h1'),
         e('h1', 'o1', 'not_them'), e('h1', 'o2', 'clicked_only'), e('h1', 'o3', 'genuine'), e('h1', 'o4', 'unreachable'),
+        e('h2', 'o6', 'reset'), e('h2', 'o7', 'monitor'), e('h2', 'o8', 'unclear'),
         e('a3', 'o5'),
       ],
     };
@@ -1798,6 +1838,18 @@ function fieldHtml(f, value) {
 const RULE_RE = /^\s*ctx\.risk_score\s*>=\s*(\d+(?:\.\d+)?)\s*$/;
 const ruleText = (cond) => { const m = RULE_RE.exec(cond || ''); return m ? `Yes if risk score ≥ ${m[1]}` : null; };
 
+function amountSliderHtml(node) {
+  let payload;
+  try { payload = JSON.parse(node.config.payload || '{}'); } catch { return ''; }
+  if (typeof payload.amount !== 'number') return '';
+  return `<div class="insp-section"><h4>Try a different amount</h4>
+    <label class="field"><span>What if the payment were <b id="amtV">${money(payload.amount)}</b>?</span>
+      <input type="range" id="amt" min="500" max="50000" step="500" value="${clamp(payload.amount, 500, 50000)}" class="slider"></label>
+    <button class="btn primary" id="amtRun">▶ Save & run again</button>
+    <div class="help">Bigger payments push the AI’s risk score up. Picking the case again restores the original amount.</div>
+  </div>`;
+}
+
 function bandSectionHtml(node) {
   const { low, high } = node.config;
   const booth = boothRules();
@@ -1844,7 +1896,7 @@ function renderNodeInspector(el, node) {
   el.innerHTML = `
     <div class="insp-head" style="--c:var(--${cat})"><span class="node-icon">${t.icon}</span><div><h2>${esc(t.title)}</h2><div class="muted">${esc(t.desc)}</div></div></div>
     <label class="field"><span>Name</span><input id="f_label" value="${esc(node.label)}" spellcheck="false"></label>
-    ${node.type === 'decision' ? ruleSliderHtml(node) : node.type === 'band' ? bandSectionHtml(node) : ''}
+    ${node.type === 'decision' ? ruleSliderHtml(node) : node.type === 'band' ? bandSectionHtml(node) : node.type === 'trigger' && KIOSK ? amountSliderHtml(node) : ''}
     ${cat === 'human' ? `<div class="insp-section"><h4>Choices (each one is an output ●)</h4><ol class="choice-list">${choicesOf(node).map((ch) => {
       const e = wf.edges.find((x) => x.from === node.id && x.fromPort === ch.port);
       return `<li><b>${esc(ch.short)}</b>: ${esc(ch.label)} <span class="muted">→ ${esc(e ? getNode(e.to).label : 'not connected yet')}</span></li>`;
@@ -1866,6 +1918,19 @@ function renderNodeInspector(el, node) {
     input.addEventListener(f.type === 'checkbox' || f.type === 'select' ? 'change' : 'input', handler);
   });
   el.querySelectorAll('[data-goto]').forEach((c) => c.addEventListener('click', () => select({ kind: 'node', id: c.dataset.goto })));
+  const amt = $('#amt', el);
+  if (amt) {
+    amt.addEventListener('input', () => {
+      const payload = JSON.parse(node.config.payload);
+      payload.amount = Number(amt.value);
+      node.config.payload = JSON.stringify(payload, null, 2);
+      $('#amtV', el).textContent = money(payload.amount);
+      const f = $('#f_payload', el);
+      if (f) f.value = node.config.payload;
+      save();
+    });
+    $('#amtRun', el)?.addEventListener('click', () => { select(null); runWorkflow(); });
+  }
   const bLow = $('#bLow', el), bHigh = $('#bHigh', el);
   if (bLow) {
     const applyBand = (moved) => {
@@ -2241,7 +2306,7 @@ function setRunStatus(text, cls) {
    Simulation engine
    ===================================================================== */
 
-function resetRunVisuals() { nodeStatus = {}; edgeStatus = {}; }
+function resetRunVisuals() { nodeStatus = {}; edgeStatus = {}; document.querySelectorAll('.think-bubble').forEach((e) => e.remove()); }
 
 function setNodeStatus(id, st) { nodeStatus[id] = st; renderNodes(); renderEdges(); }
 
@@ -2298,6 +2363,8 @@ function simulateAgent(node, ctx, data) {
       if (pick('credential_form')) { score += 15; drivers.push('credential-harvesting form'); }
       if (pick('matches')?.matches) { score += 10; drivers.push('threat intel match'); }
       if (pick('travel_notice')?.travel_notice) { score -= 15; drivers.push(`customer told the bank they are travelling (${country(pick('travel_notice').travel_notice)})`); }
+      if (ctx.campaign_domain && ctx.clicked === 0) { score -= 50; drivers.push(`quarantined ${ctx.quarantined || 'early'} — nobody clicked`); }
+      else if (ctx.no_new_logins) { score -= 30; drivers.push(`quarantined ${ctx.quarantined}; no new-device sign-ins since the clicks`); }
       score = clamp(Math.round(score + rnd(-4, 4)), 0, 100);
       out = { risk_score: score, severity: score >= 70 ? 'high' : score >= 40 ? 'medium' : 'low' };
       msg = `Risk ${score}/100 (${out.severity}). Drivers: ${drivers.join(', ') || 'none notable'}.`;
@@ -2479,6 +2546,28 @@ const PACES = {
 // Read on every wait, so changing the speed mid-run takes effect straight away
 const pace = () => PACES[$(KIOSK ? '#kioskSpeed' : '#speedSelect').value] || PACES.normal;
 
+// One-line reasoning shown in a bubble over the agent while it "thinks"
+const THINKING = {
+  triage: ['Reading the alert…', 'Comparing with the customer’s usual activity…', 'Scoring the risk…'],
+  enrichment: ['Checking where the connection came from…', 'Looking at the device history…', 'Hunting for anomalies…'],
+  correlation: ['Searching for linked cases…', 'Matching against known campaigns…', 'Tracing what happened after the logins…'],
+  investigator: ['Weighing all the evidence…', 'Testing the innocent explanation…', 'Reaching a verdict…'],
+  summarizer: ['Writing up the case…'],
+};
+
+function showThinking(node) {
+  const lines = THINKING[node.config.role] || ['Working…'];
+  const el = document.createElement('div');
+  el.className = 'think-bubble';
+  el.style.left = (node.x + 14) + 'px';
+  el.style.top = (node.y - 10) + 'px';
+  el.textContent = '🤔 ' + lines[0];
+  world.append(el);
+  let i = 0;
+  const t = setInterval(() => { i++; if (i < lines.length) el.textContent = '🤔 ' + lines[i]; else clearInterval(t); }, Math.max(450, pace().think / lines.length));
+  return () => { clearInterval(t); el.remove(); };
+}
+
 async function executeNode(node, ctx) {
   const c = node.config;
   const cat = catOf(node);
@@ -2487,7 +2576,10 @@ async function executeNode(node, ctx) {
     log({ nodeId: node.id, msg: `Case ${ctx.case_id} opened from “${c.source}”.`, details: JSON.parse(c.payload || '{}') });
     narrate({ icon: '⚡', cat: 'control', title: `Case ${ctx.case_id} opened`,
       text: ctx.campaign_domain
-        ? `Our email security spotted ${ctx.emails_sent?.toLocaleString('en-US') ?? 'many'} fake “${ctx.subject}” emails from ${ctx.campaign_domain}. Customer ${ctx.user_id} clicked the link ${ctx.clicked_at || 'recently'}.`
+        ? `Our email security spotted ${ctx.emails_sent?.toLocaleString('en-US') ?? 'many'} fake “${ctx.subject}” emails from ${ctx.campaign_domain}. ${
+            ctx.clicked === 0 ? `It quarantined every copy ${ctx.quarantined} — nobody clicked.`
+            : ctx.no_new_logins ? `It quarantined them ${ctx.quarantined}, but ${ctx.clicked} customers had already clicked.`
+            : `Customer ${ctx.user_id} clicked the link ${ctx.clicked_at || 'recently'}.`}`
         : ctx.sender_domain
         ? `Customer ${ctx.user_id} reported an email from “${ctx.sender_domain}”${ctx.subject ? `: “${ctx.subject}”` : ''}.`
         : ctx.amount ? `A ${money(ctx.amount)} payment by customer ${ctx.user_id} was flagged as unusual.` : `New alert from ${c.source}.` });
@@ -2541,7 +2633,9 @@ async function executeNode(node, ctx) {
       narrate({ icon: NODE_TYPES[ds.type].icon, cat: 'data', title: `${node.label} checks: ${ds.label}`, text: PLAIN[ds.type] + (ds.config.pii ? '. Personal details are masked first.' : '.') });
     }
     if (run.abort) return [];
+    const hideThinking = showThinking(node);
     await sleep(pace().think);
+    hideThinking();
     const { out, msg, confidence, story: beat } = simulateAgent(node, ctx, data);
     Object.assign(ctx, out);
     log({ kind: 'info', nodeId: node.id, msg: `[${c.model}] ${msg}`, details: out });
@@ -2579,6 +2673,7 @@ async function executeNode(node, ctx) {
     setNodeStatus(node.id, 'waiting');
     setRunStatus(`Waiting on ${node.config.role}`, 'waiting');
     log({ kind: 'warn', nodeId: node.id, msg: `Assigned to ${c.assignee} (${c.role}), SLA ${c.sla}. Waiting for analyst…` });
+    sfx.knock();
     narrate({ icon: '✋', cat: 'human', kind: 'you', title: `Your turn: ${node.label}`, text: `You are the ${c.role}. The AI only recommends; a person decides.` });
     const answer = await askHuman(node, ctx);
     if (!answer) { run.abort = true; return []; }
@@ -2656,6 +2751,7 @@ async function runWorkflow() {
       let fired = [];
       if (live) {
         setNodeStatus(id, 'running');
+        sfx.tick();
         if (following()) focusNode(id);
         await sleep(pace().start);
         fired = await executeNode(node, ctx);
@@ -2689,6 +2785,7 @@ async function runWorkflow() {
     const { audit, ...rest } = ctx;
     log({ kind: 'success', msg: `Run complete${ctx.outcome ? `: ${ctx.outcome}` : ''}.`, details: { ...rest, audit } });
     if (ctx.outcome) buildRan = true;
+    sfx.done();
     if (KIOSK) setTimeout(() => { if (!run.active && KIOSK) showOutcome(ctx, startedAt); }, 1200);
   }
   run.active = false;
@@ -2861,7 +2958,9 @@ async function showWelcome() {
   scenario = 'fraud';
   scenarioVariant = null;
   visitorRules = {}; // the next visitor starts from the booth defaults
+  prevRuns = {};
   $('#kioskSpeed').value = 'normal';
+  setSound(false);
   setFollow(true);
   setPanel('left', true);
   setPanel('right', true);
@@ -2896,6 +2995,38 @@ async function startScenario(name, variantId) {
   runWorkflow();
 }
 
+// The previous completed run of each case version, for the before/after recap on the end screen
+let prevRuns = {};
+
+function runSnapshot(ctx, secs) {
+  const band = wf.nodes.find((n) => n.type === 'band')?.config;
+  const people = ctx.audit.filter((a) => a.by !== 'AI (no human)');
+  let amount = null;
+  try { amount = JSON.parse(wf.nodes.find((n) => n.type === 'trigger')?.config.payload || '{}').amount ?? null; } catch { /* ignore */ }
+  return {
+    outcome: plainOutcome(ctx.outcome || 'Case closed'),
+    finding: people.map((a) => a.choice || a.decision).join(', then ') || (ctx.ai_alone ? 'AI acted alone' : 'No human needed'),
+    bands: band ? `${band.low} / ${band.high}` : null,
+    amount, secs,
+    risk: ctx.risk_score ?? null,
+  };
+}
+
+function compareHtml(prev, cur) {
+  const rows = [
+    ['Amount', prev.amount != null || cur.amount != null ? [prev.amount == null ? '–' : money(prev.amount), cur.amount == null ? '–' : money(cur.amount)] : null],
+    ['AI risk score', prev.risk != null || cur.risk != null ? [prev.risk, cur.risk] : null],
+    ['Risk bands (medium / high)', prev.bands || cur.bands ? [prev.bands, cur.bands] : null],
+    ['Decision', [prev.finding, cur.finding]],
+    ['Outcome', [prev.outcome, cur.outcome]],
+    ['Time', [prev.secs + 's', cur.secs + 's']],
+  ].filter(([, v]) => v);
+  return `<div class="compare"><h3>Same case, different run</h3>
+    <table><tr><th></th><th>Previous run</th><th>This run</th></tr>
+    ${rows.map(([k, [a, b]]) => `<tr class="${String(a) !== String(b) ? 'diff' : ''}"><td>${esc(k)}</td><td>${esc(a ?? '–')}</td><td>${esc(b ?? '–')}</td></tr>`).join('')}
+    </table></div>`;
+}
+
 // Same layout as the Report Writer agent, for workflows that don't include one
 const caseSummary = (ctx) => simulateAgent({ label: 'Case summary', config: { role: 'summarizer' } }, ctx, {}).out.report;
 
@@ -2921,6 +3052,13 @@ function showOutcome(ctx, startedAt) {
       ${stat('human', people.length, 'Human decisions')}
       ${atRisk != null ? stat('warn', money(atRisk), ctx.outcome === 'Close – no takeover' ? 'Payments confirmed genuine' : released ? 'Payment released' : 'Money at risk') : ''}
     </div>
+    ${(() => {
+      const key = scenario + ':' + scenarioVariant;
+      const cur = runSnapshot(ctx, secs);
+      const prev = prevRuns[key];
+      prevRuns[key] = cur;
+      return prev && JSON.stringify(prev) !== JSON.stringify(cur) ? compareHtml(prev, cur) : '';
+    })()}
     <details class="report-box"><summary>${ctx.report ? 'Read the AI-written case report' : 'Read the case summary'}</summary><pre class="mono">${esc(ctx.report || caseSummary(ctx))}</pre></details>`;
   const other = NEXT_SCENARIO[scenario] || 'fraud';
   $('#btnOther').textContent = `Try: ${SCENARIO_NAMES[other]} ▶`;
@@ -2944,6 +3082,43 @@ $('#btnEdit').onclick = () => { $('#outcome').hidden = true; panelTab = 'setting
 function resetToOriginal() { if (!run.active) { story = []; setWorkflow(freshWorkflow(scenario), { keepUndo: true }); toast('Workflow reset. Undo brings your changes back.'); } }
 $('#btnReset').onclick = resetToOriginal;
 $('#btnAlone').onclick = () => setAiAlone(!wf.aiAlone);
+/* Soft sounds, generated locally (no files): a tick per step, a knock when it's the visitor's
+   turn, a little chime at the outcome. Off by default; reset to off for each visitor. */
+let soundOn = false, audioCtx = null;
+function beep(freq, dur = 0.06, gain = 0.04, when = 0) {
+  if (!soundOn) return;
+  try {
+    audioCtx ||= new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = 'sine';
+    o.frequency.value = freq;
+    o.connect(g);
+    g.connect(audioCtx.destination);
+    const t = audioCtx.currentTime + when;
+    g.gain.setValueAtTime(gain, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.start(t);
+    o.stop(t + dur + 0.05);
+  } catch { /* no audio available */ }
+}
+const sfx = {
+  tick: () => beep(820, 0.045, 0.025),
+  knock: () => { beep(500, 0.09, 0.05); beep(500, 0.09, 0.05, 0.14); },
+  done: () => { beep(660, 0.1, 0.045); beep(990, 0.16, 0.045, 0.12); },
+};
+function setSound(on) {
+  soundOn = on;
+  const b = $('#btnSound');
+  b.textContent = on ? '🔊' : '🔇';
+  const label = on ? 'Turn sound off' : 'Turn sound on';
+  b.title = label;
+  b.setAttribute('aria-label', label);
+  b.setAttribute('aria-pressed', String(on));
+  if (on) sfx.tick();
+}
+$('#btnSound').onclick = () => setSound(!soundOn);
+
 function applyTheme(dark) {
   if (dark) document.documentElement.setAttribute('data-theme', 'dark'); else document.documentElement.removeAttribute('data-theme');
   const label = dark ? 'Switch to light theme' : 'Switch to dark theme';
