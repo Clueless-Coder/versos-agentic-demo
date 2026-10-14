@@ -911,10 +911,7 @@ const CATEGORIES = [
   { id: 'human', label: 'Human analysts', color: 'var(--human)' },
 ];
 
-const agentDefaults = (role, systemPrompt, outputs) => ({
-  model: 'claude-opus-5-5', role, systemPrompt, autonomy: 'recommend',
-  confidenceThreshold: 0.75, maxTurns: 10, outputs,
-});
+const agentDefaults = (role) => ({ role, autonomy: 'recommend', confidenceThreshold: 0.75 });
 
 // Human steps: each choice is its own output, so every finding leads somewhere different.
 // `ai` marks the choice the AI would pick when its evidence says 'fraud' or 'genuine' ('any' = always).
@@ -943,7 +940,7 @@ const NODE_TYPES = {
   trigger: {
     category: 'control', title: 'Case Trigger', icon: '⚡', inputs: false, outputs: ['out'],
     desc: 'Starts a run from an alert or case',
-    defaults: { source: 'Fraud alert queue', payload: '{\n  "user_id": "usr_99823",\n  "amount": 17000,\n  "ip_address": "185.23.4.11"\n}' },
+    defaults: { source: 'Card payments monitoring' }, // payload: a card-payment case setup, filled in when the step is created
   },
   decision: {
     category: 'control', title: 'Decision', icon: '◆', inputs: true, outputs: ['yes', 'no'],
@@ -965,91 +962,91 @@ const NODE_TYPES = {
   ds_transactions: {
     category: 'data', title: 'Transaction Ledger', icon: '💳', inputs: false, outputs: ['data'],
     desc: 'Historical payments for the subject',
-    defaults: { connector: 'SQL database', endpoint: 'postgres://ledger.internal/payments', query: "SELECT * FROM transactions\nWHERE user_id = :user_id\n  AND ts > now() - interval '90 days'", fields: 'amount, merchant, country, ts', refresh: 'On demand', pii: true },
+    defaults: { pii: true },
   },
   ds_customer: {
     category: 'data', title: 'Customer Profile', icon: '👤', inputs: false, outputs: ['data'],
     desc: 'KYC / CRM record',
-    defaults: { connector: 'REST API', endpoint: 'https://crm.internal/api/v2/customers/{user_id}', query: '', fields: 'home_country, tenure, kyc_level, prior_disputes', refresh: 'Cached 15 min', pii: true },
+    defaults: { pii: true },
   },
   ds_ipgeo: {
     category: 'data', title: 'IP Geolocation & Risk', icon: '🌐', inputs: false, outputs: ['data'],
     desc: 'Location, ASN and VPN detection',
-    defaults: { connector: 'REST API', endpoint: 'https://ipintel.internal/lookup/{ip_address}', query: '', fields: 'country, asn, is_vpn, risk', refresh: 'On demand', pii: false },
+    defaults: { pii: false },
   },
   ds_device: {
     category: 'data', title: 'Device Fingerprint', icon: '📱', inputs: false, outputs: ['data'],
     desc: 'Device history and sharing',
-    defaults: { connector: 'REST API', endpoint: 'https://device.internal/fp/{user_id}', query: '', fields: 'device_id, first_seen, emulator, shared_accounts', refresh: 'On demand', pii: false },
+    defaults: { pii: false },
   },
   ds_siem: {
     category: 'data', title: 'SIEM Log Search', icon: '🗂️', inputs: false, outputs: ['data'],
     desc: 'Authentication and security logs',
-    defaults: { connector: 'Splunk', endpoint: 'https://splunk.internal:8089', query: 'index=auth user=$user_id$ earliest=-7d\n| stats count by src_ip, action', fields: 'src_ip, action, count', refresh: 'On demand', pii: false },
+    defaults: { pii: false },
   },
   ds_threatintel: {
     category: 'data', title: 'Threat Intel Feed', icon: '🛡️', inputs: false, outputs: ['data'],
     desc: 'IOCs, campaigns and actors',
-    defaults: { connector: 'STIX/TAXII', endpoint: 'https://cti.internal/taxii2/collections/indicators', query: '', fields: 'indicator, type, confidence, campaign', refresh: 'Real-time stream', pii: false },
+    defaults: { pii: false },
   },
   ds_documents: {
     category: 'data', title: 'Case Evidence', icon: '📄', inputs: false, outputs: ['data'],
     desc: 'Files, emails and attachments',
-    defaults: { connector: 'Object storage', endpoint: 's3://case-evidence/{case_id}/', query: '', fields: 'filename, type, extracted_text', refresh: 'On demand', pii: true },
+    defaults: { pii: true },
   },
   ds_custom: {
     category: 'data', title: 'Custom Source', icon: '🔌', inputs: false, outputs: ['data'],
     desc: 'Any API, database or file',
-    defaults: { connector: 'REST API', endpoint: 'https://', query: '', fields: '', refresh: 'On demand', pii: false },
+    defaults: { pii: false },
   },
 
   // AI agents
   agent_triage: {
     category: 'agent', title: 'Triage Agent', icon: '🧭', inputs: true, outputs: ['out'],
     desc: 'Scores and prioritises the case',
-    defaults: agentDefaults('triage', 'You are a triage analyst. Assess the alert, assign a risk score from 0-100 and a severity, and explain the key drivers.', 'risk_score, severity'),
+    defaults: agentDefaults('triage'),
   },
   agent_enrichment: {
     category: 'agent', title: 'Enrichment Agent', icon: '🔎', inputs: true, outputs: ['out'],
     desc: 'Gathers context from data sources',
-    defaults: agentDefaults('enrichment', "Gather context about the subject from every connected data source. Report anomalies against the subject's normal baseline.", 'enrichment, anomalies'),
+    defaults: agentDefaults('enrichment'),
   },
   agent_correlation: {
     category: 'agent', title: 'Correlation Agent', icon: '🕸️', inputs: true, outputs: ['out'],
     desc: 'Links related cases and entities',
-    defaults: agentDefaults('correlation', 'Correlate this case with historical cases and threat indicators. Identify linked entities and campaigns.', 'linked_cases, campaign'),
+    defaults: agentDefaults('correlation'),
   },
   agent_investigator: {
     category: 'agent', title: 'Investigator Agent', icon: '🕵️', inputs: true, outputs: ['out'],
     desc: 'Weighs evidence, reaches a verdict',
-    defaults: agentDefaults('investigator', 'You are an expert fraud investigator. Weigh the evidence and give a verdict of [FRAUD] or [LEGITIMATE]. Always explain your chain of reasoning.', 'verdict, confidence, rationale'),
+    defaults: agentDefaults('investigator'),
   },
   agent_summarizer: {
     category: 'agent', title: 'Report Writer Agent', icon: '📝', inputs: true, outputs: ['out'],
     desc: 'Writes the case report',
-    defaults: agentDefaults('summarizer', 'Write a concise case report: timeline, evidence, decision and recommended actions.', 'report'),
+    defaults: agentDefaults('summarizer'),
   },
   agent_custom: {
     category: 'agent', title: 'Custom Agent', icon: '🤖', inputs: true, outputs: ['out'],
     desc: 'Define your own agent',
-    defaults: agentDefaults('custom', 'Describe what this agent should do.', 'result'),
+    defaults: agentDefaults('custom'),
   },
 
   // Human analysts
   human_review: {
     category: 'human', title: 'Analyst Review', icon: '🧑‍💻', inputs: true, outputs: ports('human_review'),
     desc: 'Analyst reviews and records a finding',
-    defaults: { role: 'Fraud Analyst', assignee: 'fraud-ops-queue', sla: '4h', instructions: 'Review what the agents found, check with the customer, and record your finding.', requireNotes: false, choices: CHOICES.human_review },
+    defaults: { role: 'Fraud Analyst', instructions: 'Review what the agents found, check with the customer, and record your finding.', requireNotes: false, choices: CHOICES.human_review },
   },
   human_approval: {
     category: 'human', title: 'Approval Gate', icon: '✅', inputs: true, outputs: ports('human_approval'),
     desc: 'Approve, reject or escalate a recommendation',
-    defaults: { role: 'Fraud Lead', assignee: 'fraud-leads', sla: '2h', instructions: 'Approve or reject the AI’s recommendation, or escalate if you need more evidence.', requireNotes: false, choices: CHOICES.human_approval },
+    defaults: { role: 'Fraud Lead', instructions: 'Approve or reject the AI’s recommendation, or escalate if you need more evidence.', requireNotes: false, choices: CHOICES.human_approval },
   },
   human_escalation: {
     category: 'human', title: 'Escalation', icon: '📣', inputs: true, outputs: ports('human_escalation'),
     desc: 'Hand off to a senior investigator',
-    defaults: { role: 'Senior Investigator', assignee: 'special-investigations', sla: '24h', instructions: 'Take ownership of the case, investigate in depth and record your finding.', requireNotes: false, choices: CHOICES.human_escalation },
+    defaults: { role: 'Senior Investigator', instructions: 'Take ownership of the case, investigate in depth and record your finding.', requireNotes: false, choices: CHOICES.human_escalation },
   },
 };
 
@@ -1069,44 +1066,24 @@ function aiView(ctx) {
 }
 const aiPick = (node, ctx) => { const ch = choicesOf(node), v = aiView(ctx); return ch.find((c) => c.ai === 'any') || (v && ch.find((c) => c.ai === v)) || null; };
 
+// Step settings: only what changes how a case runs. Triggers, decisions and risk bands are set
+// with their own controls (case setup, rule slider, band sliders), shown separately.
 const FIELDS = {
-  trigger: [
-    { key: 'source', label: 'Alert source', type: 'text' },
-    { key: 'payload', label: 'Sample case payload (JSON)', type: 'textarea', mono: true, rows: 7, help: 'Each field becomes ctx.<field> during a run.' },
-  ],
-  decision: [
-    { key: 'condition', label: 'Condition', type: 'text', mono: true, help: 'JavaScript expression over ctx, e.g. ctx.risk_score >= 70 && ctx.confidence > 0.8' },
-  ],
-  band: [
-    { key: 'low', label: 'Medium band starts at (below = low)', type: 'number', step: 5, min: 0, max: 100 },
-    { key: 'high', label: 'High band starts at', type: 'number', step: 5, min: 0, max: 100 },
-  ],
+  trigger: [],
+  decision: [],
+  band: [],
   end: [
-    { key: 'outcome', label: 'Disposition', type: 'select', options: OUTCOMES },
-    { key: 'notify', label: 'Notify', type: 'text', placeholder: '#fraud-ops, case owner' },
+    { key: 'outcome', label: 'Outcome', type: 'select', get options() { return OUTCOMES.map((o) => [o, plainOutcome(o)]); } },
   ],
   data: [
-    { key: 'connector', label: 'Connector', type: 'select', options: ['SQL database', 'REST API', 'GraphQL', 'Splunk', 'Elastic', 'STIX/TAXII', 'Object storage', 'CSV upload', 'Kafka stream'] },
-    { key: 'endpoint', label: 'Endpoint / connection', type: 'text', mono: true },
-    { key: 'query', label: 'Query / request template', type: 'textarea', mono: true, rows: 4, help: 'Use :field, {field} or $field$ to reference case context.' },
-    { key: 'fields', label: 'Fields exposed to agents', type: 'text' },
-    { key: 'refresh', label: 'Freshness', type: 'select', options: ['On demand', 'Cached 15 min', 'Daily snapshot', 'Real-time stream'] },
-    { key: 'pii', label: 'Contains PII — mask before sending to agents', type: 'checkbox' },
+    { key: 'pii', label: 'Mask personal details before the AI sees them', type: 'checkbox' },
   ],
   agent: [
-    { key: 'model', label: 'Model', type: 'select', options: ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5', 'claude-fable-5-1'] },
-    { key: 'systemPrompt', label: 'Instructions (system prompt)', type: 'textarea', rows: 5 },
-    { key: 'autonomy', label: 'Autonomy', type: 'select', options: [['observe', 'Observe — findings only'], ['recommend', 'Recommend — humans act'], ['act', 'Act — may take containment actions']] },
-    { key: 'confidenceThreshold', label: 'Hand off to a human below confidence', type: 'number', step: 0.05, min: 0, max: 1 },
-    { key: 'maxTurns', label: 'Max reasoning / tool turns', type: 'number', step: 1, min: 1, max: 50 },
-    { key: 'outputs', label: 'Writes to case context', type: 'text', help: 'Comma-separated ctx keys this agent produces.' },
+    { key: 'confidenceThreshold', label: 'Ask a person when the AI is less sure than', type: 'range', step: 0.05, min: 0.5, max: 0.95, fmt: (v) => Math.round(v * 100) + '%',
+      help: 'Below this confidence the agent flags the case for a person to check.' },
   ],
   human: [
-    { key: 'role', label: 'Role', type: 'text' },
-    { key: 'assignee', label: 'Assignee / queue', type: 'text' },
-    { key: 'sla', label: 'SLA', type: 'select', options: ['30m', '1h', '2h', '4h', '8h', '24h', '72h'] },
-    { key: 'instructions', label: 'Instructions to analyst', type: 'textarea', rows: 4 },
-    { key: 'requireNotes', label: 'Notes required to complete', type: 'checkbox' },
+    { key: 'role', label: 'Role (“You are the …”)', type: 'text' },
   ],
 };
 
@@ -1213,6 +1190,8 @@ function normalizeSetup(name, s) {
   return s;
 }
 
+const defaultTriggerPayload = () => JSON.stringify(casePayload('fraud', SETUP_PRESETS.fraud[0].setup), null, 2);
+
 function casePayload(name, setup) {
   const s = normalizeSetup(name, setup);
   if (name === 'fraud') {
@@ -1313,7 +1292,7 @@ const plainOutcome = (o) => ({
    ===================================================================== */
 
 function buildTemplate(name) {
-  const n = (id, type, x, y, label, cfg = {}) => ({ id, type, x, y, label: label || NODE_TYPES[type].title, config: { ...NODE_TYPES[type].defaults, ...cfg } });
+  const n = (id, type, x, y, label, cfg = {}) => ({ id, type, x, y, label: label || NODE_TYPES[type].title, config: { ...NODE_TYPES[type].defaults, ...(type === 'trigger' ? { payload: defaultTriggerPayload() } : {}), ...cfg } });
   const e = (from, to, fromPort = 'out') => ({ id: 'e_' + from + '_' + to + '_' + fromPort, from, fromPort, to });
 
   if (name === 'fraud') {
@@ -1380,13 +1359,13 @@ function buildTemplate(name) {
         n('t1', 'trigger', 40, 300, 'Phishing campaign detected', { source: 'Email security (automatic detection)', payload: JSON.stringify(casePayload('ato', SETUP_PRESETS.ato[0].setup), null, 2) }),
         n('d1', 'ds_documents', 300, 60, 'Email security logs'),
         n('d2', 'ds_threatintel', 540, 60),
-        n('a1', 'agent_triage', 300, 300, 'Phishing triage', { systemPrompt: 'Analyse the detected campaign: look-alike domains, links, urgency, impersonation and who clicked. Score risk 0-100.' }),
+        n('a1', 'agent_triage', 300, 300, 'Phishing triage'),
         n('c1', 'band', 580, 300, 'Risk bands'),
         n('d3', 'ds_siem', 840, 60, 'Sign-in logs'),
-        n('d4', 'ds_transactions', 1080, 60, 'Account transactions', { query: "SELECT * FROM transactions\nWHERE user_id = :user_id\n  AND ts > now() - interval '7 days'\nORDER BY ts DESC" }),
-        n('a2', 'agent_correlation', 840, 220, 'Account check', { systemPrompt: 'For customers who clicked, search sign-in logs for logins from new devices or places after the click, and review recent transactions for payments or payee changes made after those logins.', outputs: 'linked_cases, campaign, compromised, suspicious_transactions' }),
+        n('d4', 'ds_transactions', 1080, 60, 'Account transactions'),
+        n('a2', 'agent_correlation', 840, 220, 'Account check'),
         n('h1', 'human_review', 1110, 200, 'Fraud analyst review', {
-          role: 'Fraud Analyst', sla: '1h',
+          role: 'Fraud Analyst',
           instructions: 'The account check has looked at sign-ins and payments since the click (see the evidence). Contact the customer and record what you found: each finding leads to a different outcome.',
           choices: [
             { port: 'not_them', short: 'not them', label: 'Customer didn’t log in or make the payments', ai: 'fraud' },
@@ -1400,7 +1379,7 @@ function buildTemplate(name) {
         n('o3', 'end', 1420, 260, 'No takeover: close', { outcome: 'Close – no takeover' }),
         n('o4', 'end', 1420, 390, 'Hold payments & escalate', { outcome: 'Hold & escalate' }),
         n('h2', 'human_review', 840, 400, 'SOC analyst review', {
-          role: 'SOC Analyst', sla: '30m',
+          role: 'SOC Analyst',
           instructions: 'The campaign was quarantined quickly, so the AI scored this medium risk. Decide what to do for the customers who clicked.',
           choices: [
             { port: 'reset', short: 'reset', label: 'Reset passwords for the customers who clicked, as a precaution', ai: 'any' },
@@ -1541,17 +1520,10 @@ function renderAll() {
 function nodeSummary(node) {
   const c = node.config;
   if (node.type === 'band') return `Low < ${c.low} · Medium ${c.low}–${c.high - 1} · High ≥ ${c.high}`;
-  if (KIOSK) return node.type === 'end' ? plainOutcome(c.outcome) : node.type === 'decision' ? ruleText(c.condition) || PLAIN.decision : PLAIN[node.type];
-  switch (catOf(node)) {
-    case 'data': return `${c.connector} · ${c.fields || 'no fields'}`;
-    case 'agent': return `${c.model} · ${c.autonomy}`;
-    case 'human': return `${c.role} · SLA ${c.sla}`;
-    default:
-      if (node.type === 'trigger') return c.source;
-      if (node.type === 'decision') return c.condition;
-      if (node.type === 'end') return c.outcome;
-      return '';
-  }
+  if (node.type === 'end') return plainOutcome(c.outcome);
+  if (node.type === 'decision') return ruleText(c.condition) || PLAIN.decision;
+  if (catOf(node) === 'human') return `${c.role}: ${PLAIN[node.type].toLowerCase()}`;
+  return PLAIN[node.type];
 }
 
 const STATUS_ICON = { running: '⏳', waiting: '✋', done: '✔', skipped: '–', error: '⚠' };
@@ -1746,6 +1718,7 @@ function addNode(type, pos) {
   const t = NODE_TYPES[type];
   const node = { id: uid('n'), type, x: Math.round(pos.x), y: Math.round(pos.y), label: t.title, config: clone(t.defaults) };
   if (wf.aiAlone && t.category === 'agent') node.config.autonomy = 'act';
+  if (type === 'trigger') node.config.payload = defaultTriggerPayload();
   pushUndo();
   wf.nodes.push(node);
   selection = { kind: 'node', id: node.id };
@@ -1848,7 +1821,6 @@ function renderWorkflowInspector(el) {
   const count = (cat) => wf.nodes.filter((n) => catOf(n) === cat).length;
   el.innerHTML = `
     <div class="insp-head"><span class="node-icon" style="--c:var(--accent)">◈</span><div><h2>Workflow</h2><div class="muted">${wf.nodes.length} steps · ${wf.edges.length} connections</div></div></div>
-    <label class="field"><span>Description</span><textarea id="wfDesc" rows="3" placeholder="What does this investigation workflow handle?">${esc(wf.description)}</textarea></label>
     <div class="stats">
       <div class="stat" style="--c:var(--data)"><b>${count('data')}</b><span>Data sources</span></div>
       <div class="stat" style="--c:var(--agent)"><b>${count('agent')}</b><span>AI agents</span></div>
@@ -1862,13 +1834,12 @@ function renderWorkflowInspector(el) {
         <li>With a step selected, a new component connects to it automatically.</li>
         <li><b style="color:var(--data)">Data sources</b> plug into agents as tools/context.</li>
         <li><b style="color:var(--human)">Human steps</b> pause the run until an analyst acts.</li>
-        <li><b>Decisions</b> branch on case context, e.g. <span class="mono">ctx.risk_score &gt;= 70</span>.</li>
+        <li><b>Risk bands</b> and <b>decisions</b> route the case by its risk score; click one to move its sliders.</li>
         <li>Select a node or connection to edit it; <kbd>Del</kbd> removes it.</li>
         <li>Drag empty canvas to pan, scroll to zoom.</li>
         <li><kbd>Ctrl</kbd>+<kbd>Z</kbd> or <b>Undo</b> reverts a change.</li>
       </ul>
     </div>`;
-  $('#wfDesc').addEventListener('input', (ev) => { wf.description = ev.target.value; save(); });
 }
 
 /* ---------- Build your own ---------- */
@@ -1964,6 +1935,10 @@ function renderEdgeInspector(el, e) {
 function fieldHtml(f, value) {
   const id = 'f_' + f.key;
   if (f.type === 'checkbox') return `<label class="check"><input type="checkbox" id="${id}" data-key="${f.key}" ${value ? 'checked' : ''}> ${esc(f.label)}</label>`;
+  if (f.type === 'range') {
+    return `<label class="field"><span>${esc(f.label)} <b data-range-for="${f.key}">${esc(f.fmt(value))}</b></span>
+      <input type="range" class="slider" id="${id}" data-key="${f.key}" min="${f.min}" max="${f.max}" step="${f.step}" value="${esc(value)}">${f.help ? `<div class="help">${esc(f.help)}</div>` : ''}</label>`;
+  }
   let input;
   if (f.type === 'textarea') input = `<textarea id="${id}" data-key="${f.key}" rows="${f.rows || 3}" class="${f.mono ? 'mono' : ''}" spellcheck="${!f.mono}">${esc(value)}</textarea>`;
   else if (f.type === 'select') {
@@ -2006,7 +1981,7 @@ function ruleSliderHtml(node) {
   return `<div class="insp-section"><h4>Rule</h4>
     <label class="field"><span>Treat as high risk when the risk score is at least <b id="thrVal">${v}</b></span>
       <input type="range" id="thr" min="0" max="100" step="5" value="${v}" class="slider"></label>
-    <div class="help">${m ? 'Cases at or above this score take the “yes” path; the rest take “no”.' : 'This step uses a custom rule (shown under Configuration). Moving the slider replaces it with a risk-score rule.'}</div></div>`;
+    <div class="help">${m ? 'Cases at or above this score take the “yes” path; the rest take “no”.' : 'This step uses a custom rule. Moving the slider replaces it with a risk-score rule.'}</div></div>`;
 }
 
 function renderNodeInspector(el, node) {
@@ -2034,7 +2009,7 @@ function renderNodeInspector(el, node) {
       const e = wf.edges.find((x) => x.from === node.id && x.fromPort === ch.port);
       return `<li><b>${esc(ch.short)}</b>: ${esc(ch.label)} <span class="muted">→ ${esc(e ? getNode(e.to).label : 'not connected yet')}</span></li>`;
     }).join('')}</ol></div>` : ''}
-    <div class="insp-section"><h4>Configuration</h4>${fieldsFor(node.type).map((f) => fieldHtml(f, node.config[f.key])).join('')}</div>
+    ${fieldsFor(node.type).length ? `<div class="insp-section"><h4>Settings</h4>${fieldsFor(node.type).map((f) => fieldHtml(f, node.config[f.key])).join('')}</div>` : ''}
     ${related}
     <div class="danger-zone">
       <button class="btn" id="btnDup">Duplicate</button>
@@ -2045,7 +2020,8 @@ function renderNodeInspector(el, node) {
   el.querySelectorAll('[data-key]').forEach((input) => {
     const f = fieldsFor(node.type).find((x) => x.key === input.dataset.key);
     const handler = () => {
-      node.config[f.key] = f.type === 'checkbox' ? input.checked : f.type === 'number' ? Number(input.value) : input.value;
+      node.config[f.key] = f.type === 'checkbox' ? input.checked : f.type === 'number' || f.type === 'range' ? Number(input.value) : input.value;
+      if (f.type === 'range') $(`[data-range-for="${f.key}"]`, el).textContent = f.fmt(node.config[f.key]);
       renderNodes(); renderEdges(); save();
     };
     input.addEventListener(f.type === 'checkbox' || f.type === 'select' ? 'change' : 'input', handler);
@@ -2362,10 +2338,8 @@ function validate() {
       try { compileCondition(n.config.condition); } catch (err) { add('error', `Condition does not parse: ${err.message}`, n.id); }
     }
     if (n.type === 'band' && !(Number(n.config.low) < Number(n.config.high))) add('error', 'The medium band must start below the high band.', n.id);
-    if (cat === 'agent' && !String(n.config.systemPrompt || '').trim()) add('error', 'Agent has no instructions.', n.id);
     if (cat === 'agent' && n.config.autonomy === 'act' && !wf.edges.some((e) => e.from === n.id && catOf(getNode(e.to)) === 'human'))
       add('warn', 'Agent may act autonomously and is not followed by a human step.', n.id);
-    if (cat === 'human' && !String(n.config.assignee || '').trim()) add('warn', 'No assignee or queue.', n.id);
   }
   return issues;
 }
@@ -2643,7 +2617,7 @@ function askHuman(node, ctx) {
 
     $('#modalIcon').textContent = t.icon;
     $('#modalTitle').textContent = KIOSK ? `Your decision: ${node.label}` : node.label;
-    $('#modalMeta').textContent = KIOSK ? `You are the ${c.role}. The AI has done the legwork; the decision is yours.` : `${c.role} · ${c.assignee} · SLA ${c.sla}`;
+    $('#modalMeta').textContent = KIOSK ? `You are the ${c.role}. The AI has done the legwork; the decision is yours.` : `You are the ${c.role}.`;
     // Evidence on the left; the AI's recommendation, the choices and the note on the right
     const notesField = $('#modal .notes-field');
     $('#modal .modal-card').insertBefore(notesField, $('#modalActions')); // keep it out of the body we're about to replace
@@ -2781,7 +2755,7 @@ async function executeNode(node, ctx) {
       if (ds.config.pii) rec = maskPii(rec);
       data[ds.label] = rec;
       setNodeStatus(ds.id, 'done');
-      log({ kind: 'info', nodeId: ds.id, msg: `Queried by ${node.label} via ${ds.config.connector}${ds.config.pii ? ' (PII masked)' : ''}.`, details: rec });
+      log({ kind: 'info', nodeId: ds.id, msg: `Queried by ${node.label}${ds.config.pii ? ' (personal details masked)' : ''}.`, details: rec });
       narrate({ icon: NODE_TYPES[ds.type].icon, cat: 'data', title: `${node.label} checks: ${ds.label}`, text: PLAIN[ds.type] + (ds.config.pii ? '. Personal details are masked first.' : '.') });
     }
     if (run.abort) return [];
@@ -2790,7 +2764,7 @@ async function executeNode(node, ctx) {
     hideThinking();
     const { out, msg, confidence, story: beat } = simulateAgent(node, ctx, data);
     Object.assign(ctx, out);
-    log({ kind: 'info', nodeId: node.id, msg: `[${c.model}] ${msg}`, details: out });
+    log({ kind: 'info', nodeId: node.id, msg, details: out });
     narrate({ icon: NODE_TYPES[node.type].icon, cat: 'agent', ...beat, title: `${node.label}: ${beat.title}` });
     if (confidence < Number(c.confidenceThreshold)) {
       ctx.needs_human_review = true;
@@ -2824,7 +2798,7 @@ async function executeNode(node, ctx) {
   if (cat === 'human') {
     setNodeStatus(node.id, 'waiting');
     setRunStatus(`Waiting on ${node.config.role}`, 'waiting');
-    log({ kind: 'warn', nodeId: node.id, msg: `Assigned to ${c.assignee} (${c.role}), SLA ${c.sla}. Waiting for analyst…` });
+    log({ kind: 'warn', nodeId: node.id, msg: `Waiting for the ${c.role}…` });
     sfx.knock();
     narrate({ icon: '✋', cat: 'human', kind: 'you', title: `Your turn: ${node.label}`, text: `You are the ${c.role}. The AI only recommends; a person decides.` });
     const answer = await askHuman(node, ctx);
