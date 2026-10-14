@@ -485,10 +485,12 @@ body .layout.right-collapsed { --rw: 40px; }
 body.kiosk .run-panel { display: none; }
 body.kiosk .inspector { display: flex; flex-direction: column; min-height: 0; padding-top: 0; }
 body.kiosk .wf-name { display: none; }
+@media (max-width: 1500px) { body:not(.kiosk) .brand-name { display: none; } body:not(.kiosk) .wf-name { min-width: 90px; } }
+@media (max-width: 1250px) { body:not(.kiosk) .wf-name { display: none; } }
 body.kiosk .toolbar { font-size: 0.88em; gap: 0.6em; }
 body.kiosk .toolbar .btn { padding: 0.45em 0.85em; }
 body.kiosk .toolbar select { width: 9.5em; padding: 0.45em 0.5em; }
-body.kiosk .toolbar #kioskSpeed { width: 10.5em; }
+body.kiosk .toolbar #kioskSpeed { width: 9.6em; }
 .checklist {
   margin-top: 0.8em; background: color-mix(in srgb, var(--accent) 8%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 8px; padding: 0.6em 0.8em;
 }
@@ -552,6 +554,58 @@ body.kiosk .btn { padding: 0.5em 1.1em; }
   border-radius: 10px; padding: 5px 10px; font-size: 12px; box-shadow: 0 4px 14px var(--shadow);
   animation: beat-in .3s ease-out;
 }
+
+/* Case setup drawer: sits over the right panel so the map (and the previewed path) stays visible */
+.setup-drawer {
+  position: fixed; right: 0; top: var(--topbar-h, 52px); bottom: 0; width: clamp(340px, 32%, 560px); z-index: 45;
+  background: var(--panel); border-left: 1px solid var(--border); box-shadow: -12px 0 40px var(--shadow-lg);
+  overflow-y: auto; animation: drawer-in .25s ease-out;
+}
+.setup-drawer[hidden] { display: none; }
+@keyframes drawer-in { from { transform: translateX(40px); } }
+.setup-inner { zoom: var(--ui); padding: 14px 18px 18px; }
+.setup-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.setup-head h2 { margin: 0; font-size: 1.25em; }
+.setup-head .overlay-close { position: static; }
+.setup-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.setup-presets .vchip.on { border-color: var(--accent); color: var(--text); background: color-mix(in srgb, var(--accent) 12%, var(--panel)); }
+.setup-meter {
+  position: sticky; top: -14px; z-index: 1; background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 10px 12px; margin-bottom: 12px;
+}
+.meter-top { display: flex; align-items: baseline; gap: 10px; }
+.meter-score { font-size: 2em; font-weight: 600; line-height: 1; }
+.meter-band { font-weight: 600; }
+.meter-path { color: var(--muted); font-size: 0.92em; margin-top: 2px; }
+.meter-bar { position: relative; height: 8px; border-radius: 99px; margin: 10px 0 4px;
+  background: linear-gradient(90deg, var(--ok) 0 var(--lo), var(--warn) var(--lo) var(--hi), var(--err) var(--hi) 100%); opacity: .85; }
+.meter-dot { position: absolute; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%;
+  background: var(--panel); border: 3px solid var(--text); transition: left .25s ease; }
+.meter-why { margin: 8px 0 0; padding: 0; list-style: none; font-size: 0.85em; max-height: 9.5em; overflow-y: auto; }
+.meter-why li { display: grid; grid-template-columns: 3.2em 1fr; color: var(--text-2); padding: 1px 0; }
+.meter-why b { text-align: right; padding-right: 0.6em; }
+.meter-why .up { color: var(--err); }
+.meter-why .down { color: var(--ok); }
+.sf { display: block; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.sf-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.sf-l { font-weight: 500; }
+.sf-v { font-variant-numeric: tabular-nums; }
+.sf .slider { margin-top: 6px; }
+.sf select { width: 100%; margin-top: 6px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
+.sf.off { opacity: .45; }
+.sf .help { font-size: 0.8em; color: var(--muted); margin-top: 2px; }
+.seg { display: flex; margin-top: 6px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.seg button { flex: 1; border: 0; background: var(--panel); padding: 6px 4px; cursor: pointer; font-size: 0.9em; color: var(--muted); }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button.on { background: var(--accent); color: #fff; font-weight: 600; }
+.toggle { flex: none; width: 44px; height: 24px; border-radius: 99px; border: 0; padding: 0; cursor: pointer; position: relative;
+  background: var(--border); transition: background .15s; }
+.toggle::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: left .15s; }
+.toggle[aria-pressed="true"] { background: var(--accent); }
+.toggle[aria-pressed="true"]::after { left: 23px; }
+.toggle:disabled { cursor: not-allowed; }
+.setup-actions { position: sticky; bottom: -18px; margin: 14px -18px -18px; padding: 12px 18px 18px; background: var(--panel); border-top: 1px solid var(--border); }
+.setup-actions .btn { width: 100%; padding: 0.7em; font-size: 1.05em; }
 
 /* Welcome + outcome overlays */
 .overlay-card {
@@ -677,21 +731,22 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
       <select id="templateSelect" class="studio-only" aria-label="Load template">
         <option value="">Templates…</option>
         <option value="fraud">Card fraud investigation</option>
-        <option value="legit">Unusual payment abroad (genuine)</option>
+        <option value="ato">Phishing campaign / account takeover</option>
         <option value="blank">Blank workflow</option>
       </select>
       <button id="btnImport" class="btn studio-only">Import</button>
       <button id="btnExport" class="btn studio-only">Export JSON</button>
       <button id="btnValidate" class="btn studio-only">Validate</button>
-      <button id="btnAlone" class="btn switch kiosk-only" aria-pressed="false" title="Let the AI agents act on their own, with no human checks">🤖 AI acts alone: <b>Off</b></button>
+      <button id="btnSetup" class="btn" title="Change the case details and watch the risk score move">⚙ Setup</button>
+      <button id="btnAlone" class="btn switch kiosk-only" aria-pressed="false" title="Let the AI agents act on their own, with no human checks">🤖 AI alone: <b>Off</b></button>
       <button id="btnUndo" class="btn" title="Undo (Ctrl+Z)">↶ Undo</button>
-      <button id="btnReset" class="btn kiosk-only" title="Put this workflow back the way it started">Reset to original</button>
+      <button id="btnReset" class="btn kiosk-only" title="Put this workflow back the way it started">Reset</button>
       <button id="btnRun" class="btn primary">▶ Run simulation</button>
       <button id="btnStop" class="btn danger" hidden>■ Stop</button>
       <select id="kioskSpeed" class="kiosk-only" aria-label="Speed" title="How fast the case moves through the workflow">
-        <option value="relaxed">Speed: Relaxed</option>
-        <option value="normal" selected>Speed: Normal</option>
-        <option value="fast">Speed: Fast</option>
+        <option value="relaxed">Relaxed</option>
+        <option value="normal" selected>Normal speed</option>
+        <option value="fast">Fast</option>
       </select>
       <button id="btnRestart" class="btn kiosk-only">↺ Start over</button>
       <button id="btnSound" class="btn theme-btn kiosk-only" aria-pressed="false" title="Turn sound on" aria-label="Turn sound on">🔇</button>
@@ -783,23 +838,14 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
       <p class="lead">Pick a case. A team of AI agents gathers the evidence and recommends what to do. Then <b>you</b> make the final call as the fraud analyst. Or build your own workflow and run a case through it.</p>
       <div class="scenarios">
         <button class="scenario" data-scenario="fraud">
-          <span class="ic">💳</span><b>Suspicious card payment</b>
-          <span>A Riyadh customer’s card payment is flagged. Pick how suspicious it looks:</span>
-          <span class="vchips">
-            <span class="vchip" role="button" data-variant="high">SAR 17,000 via VPN · high</span>
-            <span class="vchip" role="button" data-variant="medium">SAR 10,500 online · medium</span>
-            <span class="vchip" role="button" data-variant="low">SAR 1,900 local · low</span>
-          </span>
-          <span class="go">Start investigation ▶</span>
+          <span class="ic">💳</span><b>Card payment</b>
+          <span>A customer’s card payment gets flagged. Set the amount, where the phone and the connection are, VPN, device and more, and watch the AI’s risk score react.</span>
+          <span class="go">Set up &amp; investigate ▶</span>
         </button>
-        <button class="scenario" data-scenario="legit">
-          <span class="ic">🧳</span><b>Unusual payment abroad</b>
-          <span>A Saudi customer buys in Lisbon. Does the bank know they’re travelling?</span>
-          <span class="vchips">
-            <span class="vchip" role="button" data-variant="travelling">SAR 3,200 · travel notice on file</span>
-            <span class="vchip" role="button" data-variant="nonotice">SAR 16,500 · no travel notice</span>
-          </span>
-          <span class="go">Start investigation ▶</span>
+        <button class="scenario" data-scenario="ato">
+          <span class="ic">🎣</span><b>Phishing campaign &amp; account takeover</b>
+          <span>Our system catches a fake “password expires” campaign. Set how early it was caught and what customers did, and see how far the criminals got.</span>
+          <span class="go">Set up &amp; investigate ▶</span>
         </button>
         <button class="scenario build" data-scenario="build">
           <span class="ic">🧩</span><b>Build your own</b>
@@ -810,6 +856,19 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
       <p class="fine">Simulated demo: every customer, payment and data source is fictional, and the AI agents are scripted for this demo. Nothing you do here is stored.</p>
     </div>
   </div>
+
+  <aside id="setup" class="setup-drawer" hidden role="dialog" aria-labelledby="setupTitle">
+    <div class="setup-inner">
+      <div class="setup-head">
+        <h2 id="setupTitle">Set up the case</h2>
+        <button class="overlay-close" id="setupClose" title="Close (Esc)" aria-label="Close">✕</button>
+      </div>
+      <div class="setup-presets" id="setupPresets"></div>
+      <div class="setup-meter" id="setupMeter"></div>
+      <div class="setup-fields" id="setupFields"></div>
+      <div class="setup-actions"><button class="btn primary" id="setupRun">▶ Run investigation</button></div>
+    </div>
+  </aside>
 
   <div id="outcome" class="modal" hidden>
     <div class="overlay-card" role="dialog" aria-modal="true" aria-labelledby="outcomeTitle">
@@ -835,6 +894,8 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
   <input id="importFile" type="file" accept="application/json,.json" hidden>
   <div id="toast" class="toast" hidden></div>
 
+  <!-- Booth defaults live in a plain file next to this page; the demo works without it -->
+  <script src="booth-config.js"></script>
   <script>window.IWS_STANDALONE = true;</script>
   <script>
 'use strict';
@@ -1089,22 +1150,151 @@ const LABELS = {
   needs_human_review: 'Flagged for review',
 };
 // Case versions: different data, so the AI's score and the path change. The first one is the default.
-const VARIANTS = {
+/* =====================================================================
+   Case setup: the controls visitors use to shape a case. The setup is written into the
+   alert's payload, and the agents read it from there, so every story stays consistent.
+   ===================================================================== */
+const LOCS = {
+  riyadh: { city: 'Riyadh', country: 'SA' }, jeddah: { city: 'Jeddah', country: 'SA' },
+  dubai: { city: 'Dubai', country: 'AE' }, lisbon: { city: 'Lisbon', country: 'PT' },
+  london: { city: 'London', country: 'GB' }, bucharest: { city: 'Bucharest', country: 'RO' },
+};
+const MERCHANTS = { regular: 'Regular supermarket', new: 'New online shop', crypto: 'Crypto exchange' };
+const CAUGHT = ['before delivery', 'after 10 minutes', 'after 30 minutes', 'after 1 hour', 'after 2 hours', 'after 6 hours'];
+const pad2 = (h) => String(h).padStart(2, '0');
+
+const SETUP_PRESETS = {
   fraud: [
-    { id: 'high', payload: { user_id: 'usr_99823', amount: 17000, ip_address: '185.23.4.11' } },
-    { id: 'medium', payload: { user_id: 'usr_55102', amount: 10500, merchant: 'Online electronics store, Riyadh', known_device: true } },
-    { id: 'low', payload: { user_id: 'usr_23870', amount: 1900, merchant: 'Furniture store, Riyadh', known_device: true } },
+    { id: 'fraud', label: 'Typical fraud', setup: { amount: 17000, phone_gps: 'riyadh', ip_location: 'bucharest', vpn: true, new_device: true, hour: 2, merchant_type: 'new', travel_notice: false } },
+    { id: 'borderline', label: 'Borderline', setup: { amount: 10500, phone_gps: 'riyadh', ip_location: 'riyadh', vpn: false, new_device: true, hour: 14, merchant_type: 'new', travel_notice: false } },
+    { id: 'normal', label: 'Looks normal', setup: { amount: 1900, phone_gps: 'riyadh', ip_location: 'riyadh', vpn: false, new_device: false, hour: 15, merchant_type: 'regular', travel_notice: false } },
+    { id: 'holiday', label: 'On holiday in Lisbon', setup: { amount: 3200, phone_gps: 'lisbon', ip_location: 'lisbon', vpn: false, new_device: false, hour: 13, merchant_type: 'new', travel_notice: true } },
+    { id: 'abroad', label: 'Abroad, no travel notice', setup: { amount: 18000, phone_gps: 'lisbon', ip_location: 'lisbon', vpn: false, new_device: false, hour: 21, merchant_type: 'new', travel_notice: false } },
   ],
-  legit: [
-    { id: 'travelling', payload: { user_id: 'usr_40217', amount: 3200, merchant: 'Electronics store, Lisbon', country: 'PT', travel_notice: 'PT' } },
-    { id: 'nonotice', payload: { user_id: 'usr_77031', amount: 16500, merchant: 'Jewellery store, Lisbon', country: 'PT', known_device: true } },
+  ato: [
+    { id: 'breakin', label: 'Break-in', setup: { emails_sent: 1240, caught: 4, clicked: 37, password_entered: true, mfa: false, new_device_login: true, new_payees: true } },
+    { id: 'phished', label: 'Passwords phished', setup: { emails_sent: 1240, caught: 2, clicked: 12, password_entered: true, mfa: false, new_device_login: false, new_payees: false } },
+    { id: 'blocked', label: 'Blocked on arrival', setup: { emails_sent: 1240, caught: 0, clicked: 0, password_entered: false, mfa: true, new_device_login: false, new_payees: false } },
   ],
 };
 
-const SCENARIO_NAMES = { fraud: 'Suspicious card payment', legit: 'Unusual payment abroad', build: 'Build your own' };
-const NEXT_SCENARIO = { fraud: 'legit', legit: 'build', build: 'fraud' };
+const SETUP_FIELDS = {
+  fraud: [
+    { key: 'amount', label: 'Amount', type: 'range', min: 500, max: 50000, step: 500, fmt: (v) => money(v) },
+    { key: 'phone_gps', label: 'Phone GPS location', type: 'select', options: () => Object.keys(LOCS).map((k) => [k, `${LOCS[k].city}, ${country(LOCS[k].country)}`]) },
+    { key: 'ip_location', label: 'Connection (IP) location', type: 'select', options: () => Object.keys(LOCS).map((k) => [k, `${LOCS[k].city}, ${country(LOCS[k].country)}`]) },
+    { key: 'vpn', label: 'Connection through a VPN', type: 'toggle' },
+    { key: 'new_device', label: 'A device the customer has never used', type: 'toggle' },
+    { key: 'hour', label: 'Time of day', type: 'range', min: 0, max: 23, step: 1, fmt: (v) => `${pad2(v)}:00` },
+    { key: 'merchant_type', label: 'Merchant', type: 'segment', options: () => Object.entries(MERCHANTS) },
+    { key: 'travel_notice', label: 'Travel notice on file', type: 'toggle', disabled: (s) => LOCS[s.phone_gps]?.country === 'SA', help: 'Matters only when the phone is abroad' },
+  ],
+  ato: [
+    { key: 'emails_sent', label: 'Fake emails sent', type: 'range', min: 100, max: 10000, step: 100, fmt: (v) => Number(v).toLocaleString('en-US') },
+    { key: 'caught', label: 'Our system quarantined them', type: 'range', min: 0, max: 5, step: 1, fmt: (v) => CAUGHT[v] },
+    { key: 'clicked', label: 'Customers who clicked', type: 'range', min: 0, max: 100, step: 1, fmt: (v) => String(v), disabled: (s) => s.caught === 0, help: 'Nobody can click if it’s caught before delivery' },
+    { key: 'password_entered', label: 'They typed their password into the fake page', type: 'toggle', disabled: (s) => !s.clicked },
+    { key: 'mfa', label: 'MFA (one-time codes) switched on', type: 'toggle' },
+    { key: 'new_device_login', label: 'A login from a new device after the click', type: 'toggle', disabled: (s) => !s.clicked || (s.mfa && s.password_entered), help: 'MFA stops a login with a stolen password' },
+    { key: 'new_payees', label: 'Payments to new payees after that login', type: 'toggle', disabled: (s) => !s.new_device_login },
+  ],
+};
+
+// Keep combinations that can't happen out of the setup
+function normalizeSetup(name, s) {
+  s = { ...s };
+  if (name === 'fraud' && LOCS[s.phone_gps]?.country === 'SA') s.travel_notice = false;
+  if (name === 'ato') {
+    if (s.caught === 0) s.clicked = 0;
+    if (!s.clicked) { s.password_entered = false; s.new_device_login = false; }
+    if (s.mfa && s.password_entered) s.new_device_login = false; // MFA blocks the stolen-password login
+    if (!s.new_device_login) s.new_payees = false;
+  }
+  return s;
+}
+
+function casePayload(name, setup) {
+  const s = normalizeSetup(name, setup);
+  if (name === 'fraud') {
+    return { case: 'card', user_id: 'usr_99823', amount: s.amount, merchant: `${MERCHANTS[s.merchant_type]}, ${LOCS[s.phone_gps].city}`,
+      merchant_type: s.merchant_type, phone_gps: s.phone_gps, ip_location: s.ip_location, vpn: s.vpn, new_device: s.new_device,
+      hour: s.hour, travel_notice: s.travel_notice };
+  }
+  return { case: 'phishing', campaign_domain: 'yourbank-secure-login.example', subject: 'Your password expires today', user_id: 'usr_31877',
+    emails_sent: s.emails_sent, caught: s.caught, clicked: s.clicked, password_entered: s.password_entered, mfa: s.mfa,
+    new_device_login: s.new_device_login, new_payees: s.new_payees };
+}
+
+const setupFromPayload = (name, p) => Object.fromEntries(SETUP_FIELDS[name].map((f) => [f.key, p[f.key]]));
+
+// Transparent scoring: every point the triage agent adds or removes, with the reason
+function riskBreakdown(c) {
+  const items = [];
+  const add = (pts, text) => items.push([Math.round(pts), text]);
+  if (c.case === 'card') {
+    const gps = LOCS[c.phone_gps] || LOCS.riyadh, ip = LOCS[c.ip_location] || gps;
+    const amt = Number(c.amount) || 0, ratio = amt / 1500;
+    add(10, 'card payment flagged for review');
+    add(Math.min(30, amt / 600), `${money(amt)} payment`);
+    if (ratio >= 10) add(12, `${Math.round(ratio)}× the customer’s usual monthly spend`);
+    else if (ratio >= 4) add(6, `${Math.round(ratio)}× the customer’s usual monthly spend`);
+    if (gps.country !== 'SA') {
+      if (c.travel_notice) add(-10, `travel notice on file for ${country(gps.country)}`);
+      else add(15, `paid from ${gps.city} with no travel notice`);
+    }
+    if (gps.country !== ip.country) add(25, `phone GPS says ${gps.city}, but the connection comes from ${ip.city}`);
+    if (c.vpn) add(15, 'connection hidden behind a VPN');
+    if (c.new_device) add(12, 'a device the customer has never used');
+    if (c.hour >= 1 && c.hour <= 5) add(6, `made at ${pad2(c.hour)}:00, in the middle of the night`);
+    if (c.merchant_type === 'crypto') add(12, 'paid to a crypto exchange');
+    else if (c.merchant_type === 'new') add(4, 'a merchant the customer has never used');
+    else add(-5, 'a shop the customer uses regularly');
+  } else if (c.case === 'phishing') {
+    add(20, `campaign impersonating the bank (${c.campaign_domain})`);
+    add([-15, 0, 3, 6, 10, 15][c.caught] ?? 0, `quarantined ${CAUGHT[c.caught]}`);
+    if (c.clicked > 0) {
+      add(Math.min(20, c.clicked * 0.6), `${c.clicked} customer${c.clicked === 1 ? '' : 's'} clicked the link`);
+      if (c.password_entered) add(15, 'passwords were typed into the fake page');
+      if (c.password_entered && c.mfa) add(-20, 'MFA blocks logins with a stolen password');
+      if (c.new_device_login) add(25, 'a login from a new device right after the click');
+      if (c.new_payees) add(20, 'payments to new payees after that login');
+    } else add(0, 'nobody clicked');
+  }
+  return { score: clamp(items.reduce((t, [p]) => t + p, 0), 0, 99), items };
+}
+
+// What a run's evidence panel shows for a configured case
+function caseEvidence(c) {
+  const yes = (v) => (v ? 'Yes' : 'No');
+  if (c.case === 'card') {
+    return [['Customer', c.user_id], ['Amount', money(c.amount)], ['Merchant', c.merchant],
+      ['Phone GPS', `${LOCS[c.phone_gps].city}, ${country(LOCS[c.phone_gps].country)}`],
+      ['Connection from', `${LOCS[c.ip_location].city}, ${country(LOCS[c.ip_location].country)}`],
+      ['VPN', yes(c.vpn)], ['New device', yes(c.new_device)], ['Time', `${pad2(c.hour)}:00`],
+      ...(LOCS[c.phone_gps].country !== 'SA' ? [['Travel notice', yes(c.travel_notice)]] : [])];
+  }
+  return [['Phishing domain', c.campaign_domain], ['Fake emails', Number(c.emails_sent).toLocaleString('en-US')],
+    ['Quarantined', CAUGHT[c.caught]], ['Customers who clicked', c.clicked], ['Passwords entered', yes(c.password_entered)],
+    ['MFA on', yes(c.mfa)], ['New-device login', yes(c.new_device_login)], ['Payments to new payees', yes(c.new_payees)]];
+}
+
+// One-line summary for the "same case, different run" table
+function setupSummary(c) {
+  if (c.case === 'card') {
+    return [money(c.amount), `${LOCS[c.phone_gps].city}→${LOCS[c.ip_location].city}`, c.vpn && 'VPN', c.new_device && 'new device',
+      `${pad2(c.hour)}:00`, MERCHANTS[c.merchant_type].toLowerCase(), c.travel_notice && 'travel notice'].filter(Boolean).join(' · ');
+  }
+  if (c.case === 'phishing') {
+    return [`${Number(c.emails_sent).toLocaleString('en-US')} emails`, CAUGHT[c.caught], `${c.clicked} clicked`, c.password_entered && 'passwords',
+      c.mfa && 'MFA', c.new_device_login && 'new login', c.new_payees && 'new payees'].filter(Boolean).join(' · ');
+  }
+  return null;
+}
+
+const SCENARIO_NAMES = { fraud: 'Card payment', ato: 'Phishing campaign & account takeover', build: 'Build your own' };
+const NEXT_SCENARIO = { fraud: 'ato', ato: 'build', build: 'fraud' };
 // Saudi riyal, written as "SAR" (the new riyal sign isn't in most fonts yet)
-const COUNTRIES = { SA: 'Saudi Arabia', RO: 'Romania', PT: 'Portugal', US: 'United States' };
+const COUNTRIES = { SA: 'Saudi Arabia', RO: 'Romania', PT: 'Portugal', AE: 'UAE', GB: 'United Kingdom', US: 'United States' };
 const country = (code) => COUNTRIES[code] || code;
 const money = (v) => 'SAR ' + Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 });
 // Outcomes state only the immediate action, never what might happen after it
@@ -1128,10 +1318,10 @@ function buildTemplate(name) {
 
   if (name === 'fraud') {
     return {
-      name: 'Card fraud investigation',
+      name: 'Card payment investigation',
       description: 'Triage high-value card alerts, enrich with device and IP intelligence, reach a verdict and let a person decide what happens.',
       nodes: [
-        n('t1', 'trigger', 40, 330, 'Card fraud alert'),
+        n('t1', 'trigger', 40, 330, 'Card payment alert', { source: 'Card payments monitoring', payload: JSON.stringify(casePayload('fraud', SETUP_PRESETS.fraud[0].setup), null, 2) }),
         n('d1', 'ds_transactions', 300, 90),
         n('a1', 'agent_triage', 300, 330),
         n('c1', 'band', 570, 330, 'Risk bands'),
@@ -1145,7 +1335,7 @@ function buildTemplate(name) {
           choices: [
             { port: 'not_them', short: 'not them', label: 'Customer confirmed it wasn’t them' },
             { port: 'scam', short: 'known scam', label: 'It matches a known scam', ai: 'fraud' },
-            { port: 'genuine', short: 'genuine', label: 'Customer says the payment was genuine', ai: 'genuine' },
+            { port: 'genuine', short: 'genuine', label: 'Customer says the payment was genuine (e.g. they’re travelling)', ai: 'genuine' },
             { port: 'unclear', short: 'unclear', label: 'Can’t reach the customer / need more evidence' },
           ],
         }),
@@ -1182,36 +1372,56 @@ function buildTemplate(name) {
     };
   }
 
-  if (name === 'legit') {
+  if (name === 'ato') {
     return {
-      name: 'Unusual payment abroad',
-      description: 'A big payment from another country turns out to be the customer on holiday. The agents clear it and close the case without taking up an analyst’s time.',
+      name: 'Phishing campaign & account takeover',
+      description: 'Our system detects a phishing campaign impersonating the bank and checks whether any customer who clicked was broken into. The earlier it catches it, the less is left to do.',
       nodes: [
-        n('t1', 'trigger', 40, 300, 'Unusual payment alert', { payload: '{\n  "user_id": "usr_40217",\n  "amount": 3200,\n  "merchant": "Electronics store, Lisbon",\n  "country": "PT",\n  "travel_notice": "PT"\n}' }),
-        n('d1', 'ds_transactions', 300, 60),
-        n('d2', 'ds_customer', 540, 60),
-        n('a1', 'agent_triage', 300, 300),
-        n('c1', 'band', 570, 300, 'Risk bands'),
-        n('a2', 'agent_investigator', 840, 140),
-        n('h1', 'human_approval', 1110, 120, 'Fraud lead approval', {
-          instructions: 'Check with the customer, then record what you found: each finding leads to a different outcome.',
+        n('t1', 'trigger', 40, 300, 'Phishing campaign detected', { source: 'Email security (automatic detection)', payload: JSON.stringify(casePayload('ato', SETUP_PRESETS.ato[0].setup), null, 2) }),
+        n('d1', 'ds_documents', 300, 60, 'Email security logs'),
+        n('d2', 'ds_threatintel', 540, 60),
+        n('a1', 'agent_triage', 300, 300, 'Phishing triage', { systemPrompt: 'Analyse the detected campaign: look-alike domains, links, urgency, impersonation and who clicked. Score risk 0-100.' }),
+        n('c1', 'band', 580, 300, 'Risk bands'),
+        n('d3', 'ds_siem', 840, 60, 'Sign-in logs'),
+        n('d4', 'ds_transactions', 1080, 60, 'Account transactions', { query: "SELECT * FROM transactions\nWHERE user_id = :user_id\n  AND ts > now() - interval '7 days'\nORDER BY ts DESC" }),
+        n('a2', 'agent_correlation', 840, 220, 'Account check', { systemPrompt: 'For customers who clicked, search sign-in logs for logins from new devices or places after the click, and review recent transactions for payments or payee changes made after those logins.', outputs: 'linked_cases, campaign, compromised, suspicious_transactions' }),
+        n('h1', 'human_review', 1110, 200, 'Fraud analyst review', {
+          role: 'Fraud Analyst', sla: '1h',
+          instructions: 'The account check has looked at sign-ins and payments since the click (see the evidence). Contact the customer and record what you found: each finding leads to a different outcome.',
           choices: [
-            { port: 'travelling', short: 'travelling', label: 'Customer confirms they’re travelling', ai: 'genuine' },
-            { port: 'not_them', short: 'not them', label: 'Customer didn’t make this payment', ai: 'fraud' },
+            { port: 'not_them', short: 'not them', label: 'Customer didn’t log in or make the payments', ai: 'fraud' },
+            { port: 'clicked_only', short: 'clicked only', label: 'Customer clicked the link, but the payments were theirs' },
+            { port: 'genuine', short: 'all genuine', label: 'Customer says the logins and payments were all theirs', ai: 'genuine' },
             { port: 'unreachable', short: 'no reply', label: 'Can’t reach the customer' },
           ],
         }),
-        n('o1', 'end', 1400, -10, 'Payment released', { outcome: 'Release payment' }),
-        n('o2', 'end', 1400, 120, 'Card blocked', { outcome: 'Block card' }),
-        n('o4', 'end', 1400, 250, 'Payment on hold', { outcome: 'Hold payment & text customer' }),
-        n('a3', 'agent_summarizer', 840, 440, 'Auto-close summary'),
-        n('o3', 'end', 1110, 440, 'Auto-close', { outcome: 'Close – no action' }),
+        n('o1', 'end', 1420, 0, 'Account secured', { outcome: 'Contain & reset credentials', notify: '#soc-incidents' }),
+        n('o2', 'end', 1420, 130, 'Password reset', { outcome: 'Reset password only' }),
+        n('o3', 'end', 1420, 260, 'No takeover: close', { outcome: 'Close – no takeover' }),
+        n('o4', 'end', 1420, 390, 'Hold payments & escalate', { outcome: 'Hold & escalate' }),
+        n('h2', 'human_review', 840, 400, 'SOC analyst review', {
+          role: 'SOC Analyst', sla: '30m',
+          instructions: 'The campaign was quarantined quickly, so the AI scored this medium risk. Decide what to do for the customers who clicked.',
+          choices: [
+            { port: 'reset', short: 'reset', label: 'Reset passwords for the customers who clicked, as a precaution', ai: 'any' },
+            { port: 'monitor', short: 'monitor', label: 'No sign any account was touched — keep monitoring' },
+            { port: 'unclear', short: 'escalate', label: 'Can’t tell yet — escalate' },
+          ],
+        }),
+        n('o6', 'end', 1150, 340, 'Passwords reset', { outcome: 'Reset password only' }),
+        n('o7', 'end', 1150, 470, 'No takeover: close', { outcome: 'Close – no takeover' }),
+        n('o8', 'end', 1150, 600, 'Escalated', { outcome: 'Escalate – senior investigator' }),
+        n('a3', 'agent_summarizer', 860, 740, 'Auto-close summary'),
+        n('o5', 'end', 1140, 740, 'Campaign blocked', { outcome: 'Close – campaign blocked' }),
       ],
       edges: [
         e('t1', 'a1'), e('d1', 'a1', 'data'), e('d2', 'a1', 'data'), e('a1', 'c1'),
-        e('c1', 'a2', 'high'), e('c1', 'h1', 'medium'), e('c1', 'a3', 'low'), e('d2', 'a2', 'data'),
-        e('a2', 'h1'), e('h1', 'o1', 'travelling'), e('h1', 'o2', 'not_them'), e('h1', 'o4', 'unreachable'),
-        e('a3', 'o3'),
+        e('c1', 'a2', 'high'), e('c1', 'h2', 'medium'), e('c1', 'a3', 'low'),
+        e('d3', 'a2', 'data'), e('d2', 'a2', 'data'), e('d4', 'a2', 'data'),
+        e('a2', 'h1'),
+        e('h1', 'o1', 'not_them'), e('h1', 'o2', 'clicked_only'), e('h1', 'o3', 'genuine'), e('h1', 'o4', 'unreachable'),
+        e('h2', 'o6', 'reset'), e('h2', 'o7', 'monitor'), e('h2', 'o8', 'unclear'),
+        e('a3', 'o5'),
       ],
     };
   }
@@ -1238,7 +1448,6 @@ const STORAGE_KEY = 'iws.workflow.v2'; // v2: human steps have choices as output
 let KIOSK = !new URLSearchParams(location.search).has('studio');
 let story = []; // kiosk narration beats
 let scenario = 'fraud';
-let scenarioVariant = null; // which case version is loaded
 let visitorRules = {}; // scenario -> { low, high }: this visitor's band edits, cleared on Start over
 let pendingHuman = null; // resolver of the open human-decision modal
 let panelTab = 'story'; // kiosk right panel: 'story' | 'settings'
@@ -1323,6 +1532,7 @@ function setWorkflow(next, { fit = true, keepUndo = false } = {}) {
 
 function renderAll() {
   updateAloneBtn();
+  $('#btnSetup').disabled = !caseOf(triggerNode());
   renderNodes();
   renderEdges();
   renderInspector();
@@ -1425,7 +1635,7 @@ function renderEdges() {
       const w = text.length * 6.5 + 12;
       label = `<g class="edge-label"><rect x="${m.x - w / 2}" y="${m.y - 9}" width="${w}" height="18" rx="9"/><text x="${m.x}" y="${m.y + 4}" text-anchor="middle">${esc(text)}</text></g>`;
     }
-    html += `<g class="edge ${kind} cat-${cat} ${sel} ${edgeStatus[e.id] || ''}" data-id="${e.id}">
+    html += `<g class="edge ${kind} cat-${cat} ${sel} ${edgeStatus[e.id] || (!run.active && previewEdges[e.id]) || ''}" data-id="${e.id}">
       <path class="edge-hit" d="${d}"/><path class="edge-line" d="${d}" marker-end="url(#arrow-${cat})"/>${label}</g>`;
   }
   if (tempEdge) html += `<path class="temp-edge" d="${tempEdge.down ? curveDown(tempEdge.a, tempEdge.b) : curve(tempEdge.a, tempEdge.b)}"/>`;
@@ -1697,7 +1907,6 @@ function showExample() {
   if (run.active) return;
   exampleFromBuild = true;
   scenario = 'fraud';
-  scenarioVariant = 'high';
   story = [];
   setWorkflow(freshWorkflow('fraud'), { keepUndo: true });
   toast('Here’s a finished example. Press Run to watch it, or Undo to get your build back.');
@@ -1768,21 +1977,16 @@ function fieldHtml(f, value) {
 const RULE_RE = /^\s*ctx\.risk_score\s*>=\s*(\d+(?:\.\d+)?)\s*$/;
 const ruleText = (cond) => { const m = RULE_RE.exec(cond || ''); return m ? `Yes if risk score ≥ ${m[1]}` : null; };
 
-function amountSliderHtml(node) {
-  let payload;
-  try { payload = JSON.parse(node.config.payload || '{}'); } catch { return ''; }
-  if (typeof payload.amount !== 'number') return '';
-  return `<div class="insp-section"><h4>Try a different amount</h4>
-    <label class="field"><span>What if the payment were <b id="amtV">${money(payload.amount)}</b>?</span>
-      <input type="range" id="amt" min="500" max="50000" step="500" value="${clamp(payload.amount, 500, 50000)}" class="slider"></label>
-    <button class="btn primary" id="amtRun">▶ Save & run again</button>
-    <div class="help">Bigger payments push the AI’s risk score up. Picking the case again restores the original amount.</div>
-  </div>`;
+function setupButtonHtml(node) {
+  if (!caseOf(node)) return '';
+  return `<div class="insp-section"><h4>Case set-up</h4>
+    <button class="btn primary" id="openSetup">⚙ Open case setup</button>
+    <div class="help">Change the amount, location, VPN and more, and watch the AI’s risk score move.</div></div>`;
 }
 
 function bandSectionHtml(node) {
   const { low, high } = node.config;
-  const booth = boothRules();
+  const cfg = configBands();
   return `<div class="insp-section"><h4>Risk bands</h4>
     <label class="field"><span><b>Medium</b> starts at <b id="bLowV">${low}</b> — below that the case auto-closes as low risk</span>
       <input type="range" id="bLow" min="5" max="90" step="5" value="${low}" class="slider"></label>
@@ -1792,8 +1996,7 @@ function bandSectionHtml(node) {
     ${KIOSK
       ? `<button class="btn primary" id="bRun" style="margin-top:8px">▶ Save & run again</button>
          <div class="help">Your bands apply until “Start over”.</div>`
-      : `<div style="margin-top:8px; display:flex; gap:8px"><button class="btn" id="bSaveBooth">Save as booth default</button><button class="btn" id="bClearBooth" ${booth ? '' : 'disabled'}>Clear booth default</button></div>
-         <div class="help">${booth ? `Booth default: medium at ${booth.low}, high at ${booth.high}. The public view starts every case with these.` : 'No booth default saved: the public view uses low 40 / high 70.'}</div>`}
+      : `<div class="help">Booth defaults come from <span class="mono">booth-config.js</span> next to this page: ${cfg ? `medium at ${cfg.low}, high at ${cfg.high}` : 'not set, so the public view uses medium 40 / high 70'}.</div>`}
   </div>`;
 }
 
@@ -1826,7 +2029,7 @@ function renderNodeInspector(el, node) {
   el.innerHTML = `
     <div class="insp-head" style="--c:var(--${cat})"><span class="node-icon">${t.icon}</span><div><h2>${esc(t.title)}</h2><div class="muted">${esc(t.desc)}</div></div></div>
     <label class="field"><span>Name</span><input id="f_label" value="${esc(node.label)}" spellcheck="false"></label>
-    ${node.type === 'decision' ? ruleSliderHtml(node) : node.type === 'band' ? bandSectionHtml(node) : node.type === 'trigger' && KIOSK ? amountSliderHtml(node) : ''}
+    ${node.type === 'decision' ? ruleSliderHtml(node) : node.type === 'band' ? bandSectionHtml(node) : node.type === 'trigger' ? setupButtonHtml(node) : ''}
     ${cat === 'human' ? `<div class="insp-section"><h4>Choices (each one is an output ●)</h4><ol class="choice-list">${choicesOf(node).map((ch) => {
       const e = wf.edges.find((x) => x.from === node.id && x.fromPort === ch.port);
       return `<li><b>${esc(ch.short)}</b>: ${esc(ch.label)} <span class="muted">→ ${esc(e ? getNode(e.to).label : 'not connected yet')}</span></li>`;
@@ -1848,19 +2051,7 @@ function renderNodeInspector(el, node) {
     input.addEventListener(f.type === 'checkbox' || f.type === 'select' ? 'change' : 'input', handler);
   });
   el.querySelectorAll('[data-goto]').forEach((c) => c.addEventListener('click', () => select({ kind: 'node', id: c.dataset.goto })));
-  const amt = $('#amt', el);
-  if (amt) {
-    amt.addEventListener('input', () => {
-      const payload = JSON.parse(node.config.payload);
-      payload.amount = Number(amt.value);
-      node.config.payload = JSON.stringify(payload, null, 2);
-      $('#amtV', el).textContent = money(payload.amount);
-      const f = $('#f_payload', el);
-      if (f) f.value = node.config.payload;
-      save();
-    });
-    $('#amtRun', el)?.addEventListener('click', () => { select(null); runWorkflow(); });
-  }
+  $('#openSetup', el)?.addEventListener('click', openSetup);
   const bLow = $('#bLow', el), bHigh = $('#bHigh', el);
   if (bLow) {
     const applyBand = (moved) => {
@@ -1877,16 +2068,6 @@ function renderNodeInspector(el, node) {
     bLow.addEventListener('input', () => applyBand('low'));
     bHigh.addEventListener('input', () => applyBand('high'));
     $('#bRun', el)?.addEventListener('click', () => { select(null); runWorkflow(); });
-    $('#bSaveBooth', el)?.addEventListener('click', () => {
-      try { localStorage.setItem(BOOTH_KEY, JSON.stringify({ low: node.config.low, high: node.config.high })); } catch { return toast('This browser blocks storage; the default can’t be saved.', true); }
-      renderInspector();
-      toast('Saved. The public view now starts every case with these bands.');
-    });
-    $('#bClearBooth', el)?.addEventListener('click', () => {
-      try { localStorage.removeItem(BOOTH_KEY); } catch { /* ignore */ }
-      renderInspector();
-      toast('Booth default cleared: the public view is back to low 40 / high 70.');
-    });
   }
   $('#thr', el)?.addEventListener('input', (ev) => {
     node.config.condition = `ctx.risk_score >= ${ev.target.value}`;
@@ -2132,6 +2313,7 @@ document.addEventListener('keydown', (ev) => {
   if (!typing && (ev.key === 'Delete' || ev.key === 'Backspace')) { ev.preventDefault(); deleteSelection(); }
   if (ev.key === 'Escape' && pendingConnect) { pendingConnect = null; return stopConnecting(); }
   if (ev.key === 'Escape' && !$('#dialog').hidden) return closeDialog();
+  if (ev.key === 'Escape' && !$('#setup').hidden && $('#modal').hidden) return closeSetup();
   if (ev.key === 'Escape' && !$('#welcome').hidden) return closeWelcome();
   if (ev.key === 'Escape' && !$('#outcome').hidden) return closeOutcome();
   if (!typing && ev.key === 'Escape') select(null);
@@ -2244,6 +2426,19 @@ const rnd = (lo, hi) => lo + Math.random() * (hi - lo);
 const round2 = (v) => Math.round(v * 100) / 100;
 
 function mockFetch(node, ctx) {
+  if (ctx.case === 'card') {
+    const gps = LOCS[ctx.phone_gps], ip = LOCS[ctx.ip_location];
+    if (node.type === 'ds_ipgeo') return { city: ip.city, country: ip.country, is_vpn: !!ctx.vpn, asn: ctx.vpn ? 'AS9009 M247 Ltd (VPN provider)' : 'Local mobile network', gps_city: gps.city };
+    if (node.type === 'ds_device') return ctx.new_device
+      ? { device_id: 'fp_7c21e9', first_seen: 'today', emulator: false, shared_accounts: 3 }
+      : { device_id: 'fp_2b80d4', first_seen: '3 years ago', emulator: false, shared_accounts: 1 };
+    if (node.type === 'ds_customer') return { home_country: 'SA', home_city: 'Riyadh', tenure_years: 6, kyc_level: 'full', prior_disputes: 0, travel_notice: ctx.travel_notice ? country(gps.country) : null };
+  }
+  if (ctx.case === 'phishing') {
+    if (node.type === 'ds_siem') return { failed_logins_7d: 0, new_src_ips: ctx.new_device_login ? 1 : 0, mfa_challenges: ctx.mfa ? ctx.clicked : 0, impossible_travel: !!ctx.new_device_login };
+    if (node.type === 'ds_transactions' && !ctx.new_payees) return { rows: 37, avg_monthly_spend: 1500, recent: [{ ts: '2026-10-09 12:05', amount: 160, payee: 'Grocery store, Riyadh', channel: 'card', new_payee: false }] };
+    if (node.type === 'ds_documents') return { files: 2, types: ['eml', 'html'], urls_found: 1, credential_form: true, quarantined: CAUGHT[ctx.caught] };
+  }
   switch (node.type) {
     case 'ds_transactions': return {
       rows: 37, avg_monthly_spend: 1500, max_single_txn: 1200, countries: ['SA'], last_txn: '2026-10-11',
@@ -2281,6 +2476,14 @@ function simulateAgent(node, ctx, data) {
 
   switch (role) {
     case 'triage': {
+      if (ctx.case) {
+        const { score, items } = riskBreakdown(ctx);
+        out = { risk_score: score, severity: score >= 70 ? 'high' : score >= 40 ? 'medium' : 'low', risk_breakdown: items };
+        msg = `Risk ${score}/100 (${out.severity}). ${items.map(([pt, t]) => `${pt >= 0 ? '+' : ''}${pt} ${t}`).join('; ')}.`;
+        story = { title: `Risk score: ${score} out of 100 (${out.severity})`,
+          items: items.filter(([pt]) => pt !== 0 || items.length < 3).map(([pt, t]) => `${pt > 0 ? '+' : pt < 0 ? '−' : '±'}${Math.abs(pt)}  ${t}`) };
+        break;
+      }
       const amt = Number(ctx.amount) || 0;
       const hist = pick('avg_monthly_spend');
       const drivers = [];
@@ -2302,6 +2505,19 @@ function simulateAgent(node, ctx, data) {
       break;
     }
     case 'enrichment': {
+      if (ctx.case === 'card') {
+        const gps = LOCS[ctx.phone_gps], ip = LOCS[ctx.ip_location], anomalies = [];
+        if (gps.country !== ip.country) anomalies.push(`Phone GPS is in ${gps.city}, but the connection comes from ${ip.city}, ${country(ip.country)}`);
+        if (ctx.vpn) anomalies.push(`Connection goes through a VPN / data-centre address`);
+        if (ctx.new_device) anomalies.push('Device first seen today, and already used on 3 other accounts');
+        if (gps.country !== 'SA' && !ctx.travel_notice) anomalies.push(`Paying from ${gps.city}, ${country(gps.country)}, with no travel notice`);
+        if (ctx.hour >= 1 && ctx.hour <= 5) anomalies.push(`Made at ${pad2(ctx.hour)}:00`);
+        if (ctx.merchant_type === 'crypto') anomalies.push('Paid to a crypto exchange');
+        out = { anomalies };
+        msg = anomalies.length ? `${anomalies.length} anomalies found.` : 'No anomalies found.';
+        story = anomalies.length ? { title: `Found ${anomalies.length} red flag${anomalies.length === 1 ? '' : 's'}`, items: anomalies } : { title: 'Nothing unusual found', text: 'Location, connection and device all match the customer’s normal pattern.' };
+        break;
+      }
       const anomalies = [];
       const ip = pick('is_vpn'), cust = pick('home_country'), dev = pick('shared_accounts'), siem = pick('failed_logins_7d');
       if (ip?.is_vpn) anomalies.push(`IP is a VPN / data-centre address (${ip.asn}) in ${country(ip.country)}`);
@@ -2399,7 +2615,9 @@ function askHuman(node, ctx) {
       .filter((k) => ctx[k] != null && !(KIOSK && ['verdict', 'confidence', 'recommended_action', 'needs_human_review'].includes(k)));
     const label = (k) => (KIOSK ? LABELS[k] || k : k);
     const value = (k, v) => (KIOSK ? kioskValue(k, v) : Array.isArray(v) ? v.join(', ') : v);
-    const rows = show.map((k) => `<dt>${esc(label(k))}</dt><dd>${esc(value(k, ctx[k]))}</dd>`);
+    const rows = KIOSK && ctx.case
+      ? [...caseEvidence(ctx), ['Risk score', `${ctx.risk_score} / 100 (${ctx.severity})`]].map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`)
+      : show.map((k) => `<dt>${esc(label(k))}</dt><dd>${esc(value(k, ctx[k]))}</dd>`);
     if (ctx.anomalies?.length) rows.push(`<dt>${KIOSK ? 'Red flags' : 'anomalies'}</dt><dd>${ctx.anomalies.map(esc).join('<br>')}</dd>`);
     if (ctx.suspicious_transactions?.length) rows.push(`<dt>${KIOSK ? 'Suspicious payments' : 'suspicious transactions'}</dt><dd>${ctx.suspicious_transactions.map(esc).join('<br>')}</dd>`);
     if (ctx.rationale && !KIOSK) rows.push(`<dt>agent rationale</dt><dd>${esc(ctx.rationale)}</dd>`);
@@ -2505,7 +2723,11 @@ async function executeNode(node, ctx) {
   if (node.type === 'trigger') {
     log({ nodeId: node.id, msg: `Case ${ctx.case_id} opened from “${c.source}”.`, details: JSON.parse(c.payload || '{}') });
     narrate({ icon: '⚡', cat: 'control', title: `Case ${ctx.case_id} opened`,
-      text: ctx.campaign_domain
+      text: ctx.case === 'card'
+        ? `A ${money(ctx.amount)} payment at ${ctx.merchant} by customer ${ctx.user_id} at ${pad2(ctx.hour)}:00. Phone GPS: ${LOCS[ctx.phone_gps].city}; connection from ${LOCS[ctx.ip_location].city}${ctx.vpn ? ' via a VPN' : ''}${ctx.new_device ? ', on a new device' : ''}.`
+        : ctx.case === 'phishing'
+        ? `Our email security spotted ${Number(ctx.emails_sent).toLocaleString('en-US')} fake “${ctx.subject}” emails from ${ctx.campaign_domain} and quarantined them ${CAUGHT[ctx.caught]}. ${ctx.clicked ? `${ctx.clicked} customer${ctx.clicked === 1 ? '' : 's'} had clicked the link.` : 'Nobody clicked.'}`
+        : ctx.campaign_domain
         ? `Our email security spotted ${ctx.emails_sent?.toLocaleString('en-US') ?? 'many'} fake “${ctx.subject}” emails from ${ctx.campaign_domain}. ${
             ctx.clicked === 0 ? `It quarantined every copy ${ctx.quarantined} — nobody clicked.`
             : ctx.no_new_logins ? `It quarantined them ${ctx.quarantined}, but ${ctx.clicked} customers had already clicked.`
@@ -2644,6 +2866,7 @@ async function runWorkflow() {
     return toast(`${errors.length} error(s) — see the run log.`, true);
   }
 
+  closeSetup();
   run = { active: true, abort: false };
   story = [];
   panelTab = 'story';
@@ -2844,6 +3067,7 @@ $('.palette').addEventListener('click', (ev) => { if (!panelOpen('left')) { ev.s
 $('#inspector').addEventListener('click', (ev) => { if (!panelOpen('right')) { ev.stopPropagation(); setPanel('right', true); } }, true);
 $('#paletteSearch').addEventListener('input', (ev) => renderPalette(ev.target.value));
 function applyUiScale() {
+  document.documentElement.style.setProperty('--topbar-h', $('.topbar').offsetHeight + 'px');
   document.documentElement.style.setProperty('--ui', String(clamp(innerWidth / 1920, 1, 2)));
 }
 window.addEventListener('resize', () => { applyUiScale(); KIOSK ? fitView() : renderEdges(); });
@@ -2886,8 +3110,9 @@ async function showWelcome() {
   story = [];
   panelTab = 'story';
   scenario = 'fraud';
-  scenarioVariant = null;
   visitorRules = {}; // the next visitor starts from the booth defaults
+  visitorSetup = {};
+  closeSetup();
   prevRuns = {};
   $('#kioskSpeed').value = 'normal';
   setSound(false);
@@ -2898,32 +3123,184 @@ async function showWelcome() {
   $('#welcome').hidden = false;
 }
 
-const BOOTH_KEY = 'iws.booth.v1';
-const boothRules = () => { try { return JSON.parse(localStorage.getItem(BOOTH_KEY)); } catch { return null; } };
+/* Booth defaults come from booth-config.js (window.BOOTH_CONFIG). Anything missing or invalid
+   falls back to the built-in values. */
+const CONFIG = window.BOOTH_CONFIG || {};
+function configBands() {
+  const b = CONFIG.riskBands, lo = Number(b?.medium), hi = Number(b?.high);
+  return Number.isFinite(lo) && Number.isFinite(hi) && lo >= 0 && lo < hi && hi <= 100 ? { low: lo, high: hi } : null;
+}
+const CONFIG_KEYS = {
+  fraud: ['cardPayment', { amount: 'amount', phoneGps: 'phone_gps', connectionFrom: 'ip_location', vpn: 'vpn', newDevice: 'new_device', hour: 'hour', merchant: 'merchant_type', travelNotice: 'travel_notice' }],
+  ato: ['phishing', { emailsSent: 'emails_sent', caught: 'caught', clicked: 'clicked', passwordEntered: 'password_entered', mfa: 'mfa', newDeviceLogin: 'new_device_login', newPayees: 'new_payees' }],
+};
+function configSetup(name) {
+  const [section, map] = CONFIG_KEYS[name] || [];
+  const c = section && CONFIG[section];
+  if (!c) return null;
+  const preset = SETUP_PRESETS[name].find((p) => p.label.toLowerCase() === String(c.preset || '').toLowerCase()) || SETUP_PRESETS[name][0];
+  const out = { ...preset.setup };
+  for (const [key, internal] of Object.entries(map)) {
+    if (c[key] === undefined) continue;
+    const f = SETUP_FIELDS[name].find((x) => x.key === internal);
+    let v = c[key];
+    if (internal === 'caught' && typeof v === 'string') { v = CAUGHT.indexOf(v.toLowerCase()); if (v < 0) continue; }
+    if (f.type === 'range') { v = Number(v); if (Number.isFinite(v)) out[internal] = clamp(Math.round(v), f.min, f.max); }
+    else if (f.type === 'toggle') { if (typeof v === 'boolean') out[internal] = v; }
+    else if (f.options().some(([k]) => k === v)) out[internal] = v;
+  }
+  return out;
+}
 
-// A scenario's workflow: template + chosen case version + booth defaults + this visitor's band edits
-function freshWorkflow(name, variantId = scenarioVariant) {
+let visitorSetup = {}; // scenario -> this visitor's case setup, cleared on Start over
+const setupFor = (name) => visitorSetup[name] || configSetup(name) || SETUP_PRESETS[name][0].setup;
+
+// A scenario's workflow: template + case setup + booth bands + this visitor's band edits
+function freshWorkflow(name) {
   const w = buildTemplate(name);
-  const v = VARIANTS[name]?.find((x) => x.id === variantId) || VARIANTS[name]?.[0];
-  if (v) w.nodes.find((n) => n.type === 'trigger').config.payload = JSON.stringify(v.payload, null, 2);
-  if (KIOSK) w.nodes.filter((n) => n.type === 'band').forEach((n) => Object.assign(n.config, boothRules() || {}, visitorRules[name] || {}));
+  if (SETUP_FIELDS[name]) w.nodes.find((n) => n.type === 'trigger').config.payload = JSON.stringify(casePayload(name, setupFor(name)), null, 2);
+  if (KIOSK) w.nodes.filter((n) => n.type === 'band').forEach((n) => Object.assign(n.config, configBands() || {}, visitorRules[name] || {}));
   return w;
 }
 
-async function startScenario(name, variantId) {
+async function startScenario(name) {
   await stopRun();
   $('#welcome').hidden = true;
   $('#outcome').hidden = true;
   scenario = name;
-  scenarioVariant = variantId || VARIANTS[name]?.[0]?.id || null;
   story = [];
   panelTab = 'story';
   buildRan = false;
   setWorkflow(freshWorkflow(name));
   if (name === 'build') return toast('Drag components from the left between the alert and the outcome. The checklist on the right shows the steps.');
-  await sleep(600); // let visitors see the map before it starts moving
-  runWorkflow();
+  openSetup();
 }
+
+/* ---------- Case setup drawer ---------- */
+
+// Which configurable case a trigger node holds ('fraud' | 'ato'), from its payload
+function caseOf(trigger) {
+  try { const c = JSON.parse(trigger?.config.payload || '{}').case; return c === 'card' ? 'fraud' : c === 'phishing' ? 'ato' : null; } catch { return null; }
+}
+const triggerNode = () => wf?.nodes.find((n) => n.type === 'trigger');
+const currentPayload = () => { try { return JSON.parse(triggerNode().config.payload); } catch { return {}; } };
+
+let previewEdges = {}; // edge id -> 'fired' | 'dead' while the setup drawer previews the path
+
+function bandTarget(score) {
+  const band = wf.nodes.find((n) => n.type === 'band');
+  if (!band) return null;
+  const port = score < band.config.low ? 'low' : score < band.config.high ? 'medium' : 'high';
+  const edge = wf.edges.find((e) => e.from === band.id && e.fromPort === port);
+  return { band, port, edge, target: edge && getNode(edge.to) };
+}
+
+// Light up the branch this setup would take: the band's chosen exit, then on through single-exit steps
+function previewPath(score) {
+  previewEdges = {};
+  const t = bandTarget(score);
+  if (t) {
+    wf.edges.filter((e) => e.from === t.band.id).forEach((e) => { previewEdges[e.id] = e === t.edge ? 'fired' : 'dead'; });
+    let id = t.edge?.to;
+    for (let hops = 0; id && hops < 6; hops++) {
+      const n = getNode(id);
+      if (!n || catOf(n) === 'human' || outputsOf(n).length !== 1) break;
+      const next = wf.edges.find((e) => e.from === id && !isDataNode(e.from));
+      if (!next) break;
+      previewEdges[next.id] = 'fired';
+      id = next.to;
+    }
+  }
+  renderEdges();
+}
+
+function renderMeter(payload) {
+  const { score, items } = riskBreakdown(payload);
+  const t = bandTarget(score);
+  const lo = t?.band.config.low ?? 40, hi = t?.band.config.high ?? 70;
+  const band = score < lo ? 'Low' : score < hi ? 'Medium' : 'High';
+  const colour = band === 'Low' ? 'var(--ok)' : band === 'Medium' ? 'var(--warn)' : 'var(--err)';
+  $('#setupMeter').innerHTML = `
+    <div class="meter-top"><span class="meter-score" style="color:${colour}">${score}</span>
+      <span><span class="meter-band" style="color:${colour}">${band} risk</span><div class="meter-path">${t?.target ? `→ ${esc(t.target.label)}` : 'Expected AI risk score'}</div></span></div>
+    <div class="meter-bar" style="--lo:${lo}%;--hi:${hi}%"><span class="meter-dot" style="left:${score}%"></span></div>
+    <ul class="meter-why">${items.filter(([pt]) => pt !== 0).map(([pt, txt]) => `<li><b class="${pt > 0 ? 'up' : 'down'}">${pt > 0 ? '+' : '−'}${Math.abs(pt)}</b><span>${esc(txt)}</span></li>`).join('')}</ul>`;
+  previewPath(score);
+}
+
+// Write a setup into the alert, refresh the meter; full = also redraw the controls
+function applySetup(name, setup, full = true) {
+  const s = normalizeSetup(name, setup);
+  triggerNode().config.payload = JSON.stringify(casePayload(name, s), null, 2);
+  if (KIOSK) visitorSetup[name] = s;
+  save();
+  if (full) renderSetup(name); else renderMeter(currentPayload());
+}
+
+function renderSetup(name) {
+  const payload = currentPayload();
+  const s = setupFromPayload(name, payload);
+  $('#setupTitle').textContent = `Set up: ${SCENARIO_NAMES[name]}`;
+  const same = (a) => JSON.stringify(normalizeSetup(name, a)) === JSON.stringify(normalizeSetup(name, s));
+  $('#setupPresets').innerHTML = SETUP_PRESETS[name].map((pr, i) => `<button type="button" class="vchip ${same(pr.setup) ? 'on' : ''}" data-preset="${i}">${esc(pr.label)}</button>`).join('');
+  $('#setupFields').innerHTML = SETUP_FIELDS[name].map((f) => {
+    const off = f.disabled?.(s);
+    const v = s[f.key];
+    let control = '';
+    if (f.type === 'range') control = `<input type="range" class="slider" data-k="${f.key}" min="${f.min}" max="${f.max}" step="${f.step}" value="${v}" ${off ? 'disabled' : ''}>`;
+    if (f.type === 'select') control = `<select data-k="${f.key}" ${off ? 'disabled' : ''}>${f.options().map(([k, l]) => `<option value="${k}" ${k === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+    if (f.type === 'segment') control = `<div class="seg" role="group">${f.options().map(([k, l]) => `<button type="button" data-k="${f.key}" data-v="${k}" class="${k === v ? 'on' : ''}" ${off ? 'disabled' : ''}>${esc(l)}</button>`).join('')}</div>`;
+    const head = f.type === 'toggle'
+      ? `<div class="sf-row"><span class="sf-l">${esc(f.label)}</span><button type="button" class="toggle" data-k="${f.key}" aria-pressed="${!!v}" aria-label="${esc(f.label)}" ${off ? 'disabled' : ''}></button></div>`
+      : `<div class="sf-row"><span class="sf-l">${esc(f.label)}</span>${f.fmt ? `<b class="sf-v" data-v-for="${f.key}">${esc(f.fmt(v))}</b>` : ''}</div>`;
+    return `<div class="sf ${off ? 'off' : ''}">${head}${control}${off && f.help ? `<div class="help">${esc(f.help)}</div>` : ''}</div>`;
+  }).join('');
+  renderMeter(payload);
+}
+
+function openSetup() {
+  const name = caseOf(triggerNode());
+  if (!name) return toast('This workflow’s alert has no case setup. Pick a case from the start screen.', true);
+  if (run.active) return toast('Wait for the run to finish, or press Stop.');
+  renderSetup(name);
+  $('#setup').hidden = false;
+}
+
+function closeSetup() {
+  $('#setup').hidden = true;
+  if (Object.keys(previewEdges).length) { previewEdges = {}; renderEdges(); }
+}
+
+$('#setup').addEventListener('input', (ev) => {
+  const k = ev.target.dataset.k;
+  if (!k || ev.target.type !== 'range') return;
+  const name = caseOf(triggerNode());
+  const s = setupFromPayload(name, currentPayload());
+  const f = SETUP_FIELDS[name].find((x) => x.key === k);
+  s[k] = Number(ev.target.value);
+  $(`[data-v-for="${k}"]`).textContent = f.fmt(s[k]);
+  applySetup(name, s, false);
+});
+$('#setup').addEventListener('change', (ev) => {
+  const k = ev.target.dataset.k;
+  if (!k) return;
+  const name = caseOf(triggerNode());
+  const s = setupFromPayload(name, currentPayload());
+  s[k] = ev.target.type === 'range' ? Number(ev.target.value) : ev.target.value;
+  applySetup(name, s); // redraw: other controls may switch on or off
+});
+$('#setup').addEventListener('click', (ev) => {
+  const name = caseOf(triggerNode());
+  const b = ev.target.closest('button');
+  if (!b || !name) return;
+  const s = setupFromPayload(name, currentPayload());
+  if (b.dataset.preset) return applySetup(name, SETUP_PRESETS[name][b.dataset.preset].setup);
+  if (b.classList.contains('toggle')) { s[b.dataset.k] = b.getAttribute('aria-pressed') !== 'true'; return applySetup(name, s); }
+  if (b.dataset.v) { s[b.dataset.k] = b.dataset.v; return applySetup(name, s); }
+});
+$('#setupClose').onclick = closeSetup;
+$('#setupRun').onclick = () => { closeSetup(); select(null); runWorkflow(); };
+$('#btnSetup').onclick = () => ($('#setup').hidden ? openSetup() : closeSetup());
 
 // The previous completed run of each case version, for the before/after recap on the end screen
 let prevRuns = {};
@@ -2931,9 +3308,14 @@ let prevRuns = {};
 function runSnapshot(ctx, secs) {
   const band = wf.nodes.find((n) => n.type === 'band')?.config;
   const people = ctx.audit.filter((a) => a.by !== 'AI (no human)');
-  let amount = null;
-  try { amount = JSON.parse(wf.nodes.find((n) => n.type === 'trigger')?.config.payload || '{}').amount ?? null; } catch { /* ignore */ }
+  let amount = null, setup = null;
+  try {
+    const p = JSON.parse(wf.nodes.find((n) => n.type === 'trigger')?.config.payload || '{}');
+    setup = setupSummary(p);
+    amount = setup ? null : p.amount ?? null;
+  } catch { /* ignore */ }
   return {
+    setup,
     outcome: plainOutcome(ctx.outcome || 'Case closed'),
     finding: people.map((a) => a.choice || a.decision).join(', then ') || (ctx.ai_alone ? 'AI acted alone' : 'No human needed'),
     bands: band ? `${band.low} / ${band.high}` : null,
@@ -2944,6 +3326,7 @@ function runSnapshot(ctx, secs) {
 
 function compareHtml(prev, cur) {
   const rows = [
+    ['Case set-up', prev.setup || cur.setup ? [prev.setup, cur.setup] : null],
     ['Amount', prev.amount != null || cur.amount != null ? [prev.amount == null ? '–' : money(prev.amount), cur.amount == null ? '–' : money(cur.amount)] : null],
     ['AI risk score', prev.risk != null || cur.risk != null ? [prev.risk, cur.risk] : null],
     ['Risk bands (medium / high)', prev.bands || cur.bands ? [prev.bands, cur.bands] : null],
@@ -2983,7 +3366,7 @@ function showOutcome(ctx, startedAt) {
       ${atRisk != null ? stat('warn', money(atRisk), ctx.outcome === 'Close – no takeover' ? 'Payments confirmed genuine' : released ? 'Payment released' : 'Money at risk') : ''}
     </div>
     ${(() => {
-      const key = scenario + ':' + scenarioVariant;
+      const key = scenario;
       const cur = runSnapshot(ctx, secs);
       const prev = prevRuns[key];
       prevRuns[key] = cur;
@@ -2998,7 +3381,7 @@ function showOutcome(ctx, startedAt) {
 
 $('#welcome').addEventListener('click', (ev) => {
   const card = ev.target.closest('[data-scenario]');
-  if (card) return startScenario(card.dataset.scenario, ev.target.closest('[data-variant]')?.dataset.variant);
+  if (card) return startScenario(card.dataset.scenario);
   if (ev.target === ev.currentTarget || ev.target.closest('[data-close]')) closeWelcome();
 });
 $('#outcome').addEventListener('click', (ev) => {
