@@ -577,6 +577,12 @@ body.kiosk .btn { padding: 0.5em 1.1em; }
 .scenario b { font-size: 1.2em; }
 .scenario span { color: var(--muted); }
 .scenario .go { margin-top: auto; padding-top: 0.6em; color: var(--accent); font-weight: 600; }
+.vchips { display: flex; flex-wrap: wrap; gap: 0.35em; margin-top: 0.1em; }
+.vchip {
+  font-size: 0.8em; padding: 0.3em 0.75em; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--panel); color: var(--muted); cursor: pointer;
+}
+.vchip:hover { border-color: var(--accent); color: var(--text); }
 .fine { font-size: 0.85em; color: var(--muted); margin: 0; }
 .result-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(9em, 1fr)); gap: 0.8em; margin: 1.2em 0; }
 .result-stats .stat { text-align: left; }
@@ -624,6 +630,14 @@ body.kiosk .kv { grid-template-columns: 42% 1fr; font-size: 0.9em; gap: 3px 10px
 .reasons .chip { font-size: 0.9em; padding: 0.35em 0.8em; margin: 0 0.3em 0.4em 0; display: inline-block; }
 .reasons .chip.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); }
 body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
+
+@media (max-height: 850px) {
+  .overlay-card h1 { font-size: 1.6em; margin: 0 0 0.3em; }
+  .overlay-card .big-mark { font-size: 1.9em; }
+  .overlay-card .lead { margin-bottom: 0.9em; }
+  .scenario { padding: 0.7em 1em; }
+  .overlay-card { padding: 2% 3%; }
+}
 
 @media (max-aspect-ratio: 1/1) {
   /* portrait screens: story panel goes under the canvas */
@@ -755,7 +769,12 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
       <div class="scenarios">
         <button class="scenario" data-scenario="fraud">
           <span class="ic">💳</span><b>Suspicious card payment</b>
-          <span>A SAR 17,000 payment from a Riyadh customer who normally spends about SAR 1,500 a month.</span>
+          <span>A Riyadh customer’s card payment is flagged. Pick how suspicious it looks:</span>
+          <span class="vchips">
+            <span class="vchip" role="button" data-variant="high">SAR 17,000 via VPN · high</span>
+            <span class="vchip" role="button" data-variant="medium">SAR 10,500 online · medium</span>
+            <span class="vchip" role="button" data-variant="low">SAR 1,900 local · low</span>
+          </span>
           <span class="go">Start investigation ▶</span>
         </button>
         <button class="scenario" data-scenario="ato">
@@ -765,7 +784,11 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
         </button>
         <button class="scenario" data-scenario="legit">
           <span class="ic">🧳</span><b>Unusual payment abroad</b>
-          <span>A SAR 3,200 purchase in Lisbon from a Saudi customer. Fraud, or just a holiday?</span>
+          <span>A Saudi customer buys in Lisbon. Does the bank know they’re travelling?</span>
+          <span class="vchips">
+            <span class="vchip" role="button" data-variant="travelling">SAR 3,200 · travel notice on file</span>
+            <span class="vchip" role="button" data-variant="nonotice">SAR 16,500 · no travel notice</span>
+          </span>
           <span class="go">Start investigation ▶</span>
         </button>
         <button class="scenario build" data-scenario="build">
@@ -855,6 +878,11 @@ const NODE_TYPES = {
     category: 'control', title: 'Decision', icon: '◆', inputs: true, outputs: ['yes', 'no'],
     desc: 'Branch on a condition over the case',
     defaults: { condition: 'ctx.risk_score >= 70' },
+  },
+  band: {
+    category: 'control', title: 'Risk bands', icon: '🚦', inputs: true, outputs: ['low', 'medium', 'high'],
+    desc: 'Routes the case by risk score',
+    defaults: { low: 40, high: 70 },
   },
   end: {
     category: 'control', title: 'Case Outcome', icon: '■', inputs: true, outputs: [],
@@ -978,6 +1006,10 @@ const FIELDS = {
   decision: [
     { key: 'condition', label: 'Condition', type: 'text', mono: true, help: 'JavaScript expression over ctx, e.g. ctx.risk_score >= 70 && ctx.confidence > 0.8' },
   ],
+  band: [
+    { key: 'low', label: 'Medium band starts at (below = low)', type: 'number', step: 5, min: 0, max: 100 },
+    { key: 'high', label: 'High band starts at', type: 'number', step: 5, min: 0, max: 100 },
+  ],
   end: [
     { key: 'outcome', label: 'Disposition', type: 'select', options: OUTCOMES },
     { key: 'notify', label: 'Notify', type: 'text', placeholder: '#fraud-ops, case owner' },
@@ -1013,6 +1045,7 @@ const fieldsFor = (type) => FIELDS[type] || FIELDS[NODE_TYPES[type].category];
 const PLAIN = {
   trigger: 'An alert opens a new case',
   decision: 'Picks the next path based on the evidence so far',
+  band: 'Sorts the case by risk score: low, medium or high',
   end: 'The final outcome of the case',
   ds_transactions: "The customer's past payments",
   ds_customer: 'Who the customer is and their history with the bank',
@@ -1045,6 +1078,19 @@ const LABELS = {
   campaign: 'Scam campaign', linked_cases: 'Linked cases', compromised: 'Account taken over?', exposure: 'Money at risk',
   needs_human_review: 'Flagged for review',
 };
+// Case versions: different data, so the AI's score and the path change. The first one is the default.
+const VARIANTS = {
+  fraud: [
+    { id: 'high', payload: { user_id: 'usr_99823', amount: 17000, ip_address: '185.23.4.11' } },
+    { id: 'medium', payload: { user_id: 'usr_55102', amount: 10500, merchant: 'Online electronics store, Riyadh', known_device: true } },
+    { id: 'low', payload: { user_id: 'usr_23870', amount: 1900, merchant: 'Furniture store, Riyadh', known_device: true } },
+  ],
+  legit: [
+    { id: 'travelling', payload: { user_id: 'usr_40217', amount: 3200, merchant: 'Electronics store, Lisbon', country: 'PT', travel_notice: 'PT' } },
+    { id: 'nonotice', payload: { user_id: 'usr_77031', amount: 16500, merchant: 'Jewellery store, Lisbon', country: 'PT', known_device: true } },
+  ],
+};
+
 const SCENARIO_NAMES = { fraud: 'Suspicious card payment', ato: 'Phishing campaign & account takeover', legit: 'Unusual payment abroad', build: 'Build your own' };
 const NEXT_SCENARIO = { fraud: 'ato', ato: 'legit', legit: 'build', build: 'fraud' };
 // Saudi riyal, written as "SAR" (the new riyal sign isn't in most fonts yet)
@@ -1077,13 +1123,13 @@ function buildTemplate(name) {
         n('t1', 'trigger', 40, 330, 'Card fraud alert'),
         n('d1', 'ds_transactions', 300, 90),
         n('a1', 'agent_triage', 300, 330),
-        n('c1', 'decision', 570, 330, 'High risk?', { condition: 'ctx.risk_score >= 60' }),
-        n('d2', 'ds_ipgeo', 700, 40),
-        n('d3', 'ds_device', 950, 40),
-        n('a2', 'agent_enrichment', 840, 220),
-        n('d4', 'ds_customer', 1200, 40),
-        n('a3', 'agent_investigator', 1110, 220),
-        n('h1', 'human_approval', 1380, 200, 'Fraud lead approval', {
+        n('c1', 'band', 570, 330, 'Risk bands'),
+        n('d2', 'ds_ipgeo', 700, 10),
+        n('d3', 'ds_device', 950, 10),
+        n('a2', 'agent_enrichment', 840, 150),
+        n('d4', 'ds_customer', 1200, 10),
+        n('a3', 'agent_investigator', 1110, 150),
+        n('h1', 'human_approval', 1380, 130, 'Fraud lead approval', {
           instructions: 'The investigator agent recommends blocking the card. Check with the customer, then record what you found: each finding leads to a different outcome.',
           choices: [
             { port: 'not_them', short: 'not them', label: 'Customer confirmed it wasn’t them' },
@@ -1092,23 +1138,34 @@ function buildTemplate(name) {
             { port: 'unclear', short: 'unclear', label: 'Can’t reach the customer / need more evidence' },
           ],
         }),
-        n('o1', 'end', 1690, -40, 'Card blocked', { outcome: 'Block card', notify: '#fraud-ops' }),
-        n('o2', 'end', 1690, 90, 'Card blocked: known scam', { outcome: 'Block card – known scam', notify: '#fraud-ops' }),
-        n('o3', 'end', 1690, 220, 'Payment released', { outcome: 'Release payment' }),
-        n('h2', 'human_escalation', 1690, 380, 'Senior investigator', { instructions: 'Card is frozen. Marked for investigation.' }),
-        n('o4', 'end', 2000, 290, 'Card blocked', { outcome: 'Block card' }),
-        n('o5', 'end', 2000, 420, 'Payment released', { outcome: 'Release payment' }),
-        n('o6', 'end', 2000, 550, 'Passed to compliance', { outcome: 'Refer to compliance' }),
-        n('a4', 'agent_summarizer', 840, 520, 'Auto-close summary'),
-        n('o7', 'end', 1110, 520, 'Auto-close', { outcome: 'Close – no action' }),
+        n('o1', 'end', 1690, -70, 'Card blocked', { outcome: 'Block card', notify: '#fraud-ops' }),
+        n('o2', 'end', 1690, 60, 'Card blocked: known scam', { outcome: 'Block card – known scam', notify: '#fraud-ops' }),
+        n('o3', 'end', 1690, 190, 'Payment released', { outcome: 'Release payment' }),
+        n('h2', 'human_escalation', 1690, 330, 'Senior investigator', { instructions: 'Card is frozen. Marked for investigation.' }),
+        n('o4', 'end', 2000, 240, 'Card blocked', { outcome: 'Block card' }),
+        n('o5', 'end', 2000, 370, 'Payment released', { outcome: 'Release payment' }),
+        n('o6', 'end', 2000, 500, 'Passed to compliance', { outcome: 'Refer to compliance' }),
+        n('h3', 'human_review', 840, 420, 'Analyst review', {
+          instructions: 'The AI scored this case medium risk, so it comes straight to you. Check with the customer and record your finding.',
+          choices: [
+            { port: 'fraud', short: 'fraud', label: 'Fraud confirmed', ai: 'fraud' },
+            { port: 'genuine', short: 'genuine', label: 'Customer says the payment was genuine', ai: 'genuine' },
+            { port: 'unclear', short: 'unclear', label: 'Can’t reach the customer / need more evidence' },
+          ],
+        }),
+        n('o8', 'end', 1140, 390, 'Card blocked', { outcome: 'Block card' }),
+        n('o9', 'end', 1140, 520, 'Payment released', { outcome: 'Release payment' }),
+        n('a4', 'agent_summarizer', 860, 660, 'Auto-close summary'),
+        n('o7', 'end', 1140, 660, 'Auto-close', { outcome: 'Close – no action' }),
       ],
       edges: [
         e('t1', 'a1'), e('d1', 'a1', 'data'), e('a1', 'c1'),
-        e('c1', 'a2', 'yes'), e('c1', 'a4', 'no'),
+        e('c1', 'a2', 'high'), e('c1', 'h3', 'medium'), e('c1', 'a4', 'low'),
         e('d2', 'a2', 'data'), e('d3', 'a2', 'data'),
         e('a2', 'a3'), e('d4', 'a3', 'data'), e('d1', 'a3', 'data'),
         e('a3', 'h1'), e('h1', 'o1', 'not_them'), e('h1', 'o2', 'scam'), e('h1', 'o3', 'genuine'), e('h1', 'h2', 'unclear'),
         e('h2', 'o4', 'fraud'), e('h2', 'o5', 'genuine'), e('h2', 'o6', 'refer'),
+        e('h3', 'o8', 'fraud'), e('h3', 'o9', 'genuine'), e('h3', 'h2', 'unclear'),
         e('a4', 'o7'),
       ],
     };
@@ -1164,9 +1221,9 @@ function buildTemplate(name) {
         n('d1', 'ds_transactions', 300, 60),
         n('d2', 'ds_customer', 540, 60),
         n('a1', 'agent_triage', 300, 300),
-        n('c1', 'decision', 570, 300, 'High risk?', { condition: 'ctx.risk_score >= 60' }),
-        n('a2', 'agent_investigator', 840, 160),
-        n('h1', 'human_approval', 1110, 140, 'Fraud lead approval', {
+        n('c1', 'band', 570, 300, 'Risk bands'),
+        n('a2', 'agent_investigator', 840, 140),
+        n('h1', 'human_approval', 1110, 120, 'Fraud lead approval', {
           instructions: 'Check with the customer, then record what you found: each finding leads to a different outcome.',
           choices: [
             { port: 'travelling', short: 'travelling', label: 'Customer confirms they’re travelling', ai: 'genuine' },
@@ -1174,15 +1231,15 @@ function buildTemplate(name) {
             { port: 'unreachable', short: 'no reply', label: 'Can’t reach the customer' },
           ],
         }),
-        n('o1', 'end', 1400, 10, 'Payment released', { outcome: 'Release payment' }),
-        n('o2', 'end', 1400, 140, 'Card blocked', { outcome: 'Block card' }),
-        n('o4', 'end', 1400, 270, 'Payment on hold', { outcome: 'Hold payment & text customer' }),
-        n('a3', 'agent_summarizer', 840, 460, 'Auto-close summary'),
-        n('o3', 'end', 1110, 460, 'Auto-close', { outcome: 'Close – no action' }),
+        n('o1', 'end', 1400, -10, 'Payment released', { outcome: 'Release payment' }),
+        n('o2', 'end', 1400, 120, 'Card blocked', { outcome: 'Block card' }),
+        n('o4', 'end', 1400, 250, 'Payment on hold', { outcome: 'Hold payment & text customer' }),
+        n('a3', 'agent_summarizer', 840, 440, 'Auto-close summary'),
+        n('o3', 'end', 1110, 440, 'Auto-close', { outcome: 'Close – no action' }),
       ],
       edges: [
         e('t1', 'a1'), e('d1', 'a1', 'data'), e('d2', 'a1', 'data'), e('a1', 'c1'),
-        e('c1', 'a2', 'yes'), e('c1', 'a3', 'no'), e('d2', 'a2', 'data'),
+        e('c1', 'a2', 'high'), e('c1', 'h1', 'medium'), e('c1', 'a3', 'low'), e('d2', 'a2', 'data'),
         e('a2', 'h1'), e('h1', 'o1', 'travelling'), e('h1', 'o2', 'not_them'), e('h1', 'o4', 'unreachable'),
         e('a3', 'o3'),
       ],
@@ -1211,6 +1268,8 @@ const STORAGE_KEY = 'iws.workflow.v2'; // v2: human steps have choices as output
 let KIOSK = !new URLSearchParams(location.search).has('studio');
 let story = []; // kiosk narration beats
 let scenario = 'fraud';
+let scenarioVariant = null; // which case version is loaded
+let visitorRules = {}; // scenario -> { low, high }: this visitor's band edits, cleared on Start over
 let pendingHuman = null; // resolver of the open human-decision modal
 let panelTab = 'story'; // kiosk right panel: 'story' | 'settings'
 let buildRan = false; // Build your own: a run reached an outcome
@@ -1301,6 +1360,7 @@ function renderAll() {
 
 function nodeSummary(node) {
   const c = node.config;
+  if (node.type === 'band') return `Low < ${c.low} · Medium ${c.low}–${c.high - 1} · High ≥ ${c.high}`;
   if (KIOSK) return node.type === 'end' ? plainOutcome(c.outcome) : node.type === 'decision' ? ruleText(c.condition) || PLAIN.decision : PLAIN[node.type];
   switch (catOf(node)) {
     case 'data': return `${c.connector} · ${c.fields || 'no fields'}`;
@@ -1667,8 +1727,9 @@ function showExample() {
   if (run.active) return;
   exampleFromBuild = true;
   scenario = 'fraud';
+  scenarioVariant = 'high';
   story = [];
-  setWorkflow(buildTemplate('fraud'), { keepUndo: true });
+  setWorkflow(freshWorkflow('fraud'), { keepUndo: true });
   toast('Here’s a finished example. Press Run to watch it, or Undo to get your build back.');
 }
 
@@ -1737,6 +1798,23 @@ function fieldHtml(f, value) {
 const RULE_RE = /^\s*ctx\.risk_score\s*>=\s*(\d+(?:\.\d+)?)\s*$/;
 const ruleText = (cond) => { const m = RULE_RE.exec(cond || ''); return m ? `Yes if risk score ≥ ${m[1]}` : null; };
 
+function bandSectionHtml(node) {
+  const { low, high } = node.config;
+  const booth = boothRules();
+  return `<div class="insp-section"><h4>Risk bands</h4>
+    <label class="field"><span><b>Medium</b> starts at <b id="bLowV">${low}</b> — below that the case auto-closes as low risk</span>
+      <input type="range" id="bLow" min="5" max="90" step="5" value="${low}" class="slider"></label>
+    <label class="field"><span><b>High</b> starts at <b id="bHighV">${high}</b> — a full AI investigation, then the fraud lead decides</span>
+      <input type="range" id="bHigh" min="10" max="95" step="5" value="${high}" class="slider"></label>
+    <div class="help">In between, an analyst reviews the case directly.</div>
+    ${KIOSK
+      ? `<button class="btn primary" id="bRun" style="margin-top:8px">▶ Save & run again</button>
+         <div class="help">Your bands apply until “Start over”.</div>`
+      : `<div style="margin-top:8px; display:flex; gap:8px"><button class="btn" id="bSaveBooth">Save as booth default</button><button class="btn" id="bClearBooth" ${booth ? '' : 'disabled'}>Clear booth default</button></div>
+         <div class="help">${booth ? `Booth default: medium at ${booth.low}, high at ${booth.high}. The public view starts every case with these.` : 'No booth default saved: the public view uses low 40 / high 70.'}</div>`}
+  </div>`;
+}
+
 function ruleSliderHtml(node) {
   const m = RULE_RE.exec(node.config.condition || '');
   const v = m ? Number(m[1]) : 60;
@@ -1766,7 +1844,7 @@ function renderNodeInspector(el, node) {
   el.innerHTML = `
     <div class="insp-head" style="--c:var(--${cat})"><span class="node-icon">${t.icon}</span><div><h2>${esc(t.title)}</h2><div class="muted">${esc(t.desc)}</div></div></div>
     <label class="field"><span>Name</span><input id="f_label" value="${esc(node.label)}" spellcheck="false"></label>
-    ${node.type === 'decision' ? ruleSliderHtml(node) : ''}
+    ${node.type === 'decision' ? ruleSliderHtml(node) : node.type === 'band' ? bandSectionHtml(node) : ''}
     ${cat === 'human' ? `<div class="insp-section"><h4>Choices (each one is an output ●)</h4><ol class="choice-list">${choicesOf(node).map((ch) => {
       const e = wf.edges.find((x) => x.from === node.id && x.fromPort === ch.port);
       return `<li><b>${esc(ch.short)}</b>: ${esc(ch.label)} <span class="muted">→ ${esc(e ? getNode(e.to).label : 'not connected yet')}</span></li>`;
@@ -1788,6 +1866,33 @@ function renderNodeInspector(el, node) {
     input.addEventListener(f.type === 'checkbox' || f.type === 'select' ? 'change' : 'input', handler);
   });
   el.querySelectorAll('[data-goto]').forEach((c) => c.addEventListener('click', () => select({ kind: 'node', id: c.dataset.goto })));
+  const bLow = $('#bLow', el), bHigh = $('#bHigh', el);
+  if (bLow) {
+    const applyBand = (moved) => {
+      let lo = Number(bLow.value), hi = Number(bHigh.value);
+      if (lo + 5 > hi) { if (moved === 'low') { hi = lo + 5; bHigh.value = hi; } else { lo = hi - 5; bLow.value = lo; } }
+      node.config.low = lo;
+      node.config.high = hi;
+      $('#bLowV', el).textContent = lo;
+      $('#bHighV', el).textContent = hi;
+      [['#f_low', lo], ['#f_high', hi]].forEach(([id, v]) => { const f = $(id, el); if (f) f.value = v; });
+      if (KIOSK) visitorRules[scenario] = { low: lo, high: hi };
+      renderNodes(); renderEdges(); save();
+    };
+    bLow.addEventListener('input', () => applyBand('low'));
+    bHigh.addEventListener('input', () => applyBand('high'));
+    $('#bRun', el)?.addEventListener('click', () => { select(null); runWorkflow(); });
+    $('#bSaveBooth', el)?.addEventListener('click', () => {
+      try { localStorage.setItem(BOOTH_KEY, JSON.stringify({ low: node.config.low, high: node.config.high })); } catch { return toast('This browser blocks storage; the default can’t be saved.', true); }
+      renderInspector();
+      toast('Saved. The public view now starts every case with these bands.');
+    });
+    $('#bClearBooth', el)?.addEventListener('click', () => {
+      try { localStorage.removeItem(BOOTH_KEY); } catch { /* ignore */ }
+      renderInspector();
+      toast('Booth default cleared: the public view is back to low 40 / high 70.');
+    });
+  }
   $('#thr', el)?.addEventListener('input', (ev) => {
     node.config.condition = `ctx.risk_score >= ${ev.target.value}`;
     $('#thrVal', el).textContent = ev.target.value;
@@ -2079,6 +2184,7 @@ function validate() {
     if (n.type === 'decision') {
       try { compileCondition(n.config.condition); } catch (err) { add('error', `Condition does not parse: ${err.message}`, n.id); }
     }
+    if (n.type === 'band' && !(Number(n.config.low) < Number(n.config.high))) add('error', 'The medium band must start below the high band.', n.id);
     if (cat === 'agent' && !String(n.config.systemPrompt || '').trim()) add('error', 'Agent has no instructions.', n.id);
     if (cat === 'agent' && n.config.autonomy === 'act' && !wf.edges.some((e) => e.from === n.id && catOf(getNode(e.to)) === 'human'))
       add('warn', 'Agent may act autonomously and is not followed by a human step.', n.id);
@@ -2153,8 +2259,12 @@ function mockFetch(node, ctx) {
       ],
     };
     case 'ds_customer': return { home_country: 'SA', home_city: 'Riyadh', tenure_years: 6, kyc_level: 'full', prior_disputes: 0, travel_notice: ctx.travel_notice || null };
-    case 'ds_ipgeo': return { ip: ctx.ip_address || 'n/a', country: 'RO', asn: 'AS9009 M247 Ltd', is_vpn: true, risk: 'high' };
-    case 'ds_device': return { device_id: 'fp_7c21e9', first_seen: 'today', emulator: false, shared_accounts: 3 };
+    case 'ds_ipgeo': return ctx.ip_address
+      ? { ip: ctx.ip_address, country: 'RO', asn: 'AS9009 M247 Ltd', is_vpn: true, risk: 'high' }
+      : { ip: 'n/a', country: 'SA', asn: 'AS39386 Saudi Telecom', is_vpn: false, risk: 'low' };
+    case 'ds_device': return ctx.known_device
+      ? { device_id: 'fp_7c21e9', first_seen: '3 years ago', emulator: false, shared_accounts: 1 }
+      : { device_id: 'fp_7c21e9', first_seen: 'today', emulator: false, shared_accounts: 3 };
     case 'ds_siem': return { failed_logins_7d: 14, new_src_ips: 3, mfa_resets: 1, impossible_travel: true };
     case 'ds_threatintel': return { matches: 1, indicator: ctx.campaign_domain || ctx.ip_address || ctx.sender_domain || 'n/a', campaign: 'BlackCart-2026', confidence: ctx.campaign_domain ? 'high' : 'medium', domain_registered: ctx.campaign_domain ? 'yesterday' : undefined };
     case 'ds_documents': return { files: 2, types: ['eml', 'html'], urls_found: 1, credential_form: true };
@@ -2382,6 +2492,17 @@ async function executeNode(node, ctx) {
         ? `Customer ${ctx.user_id} reported an email from “${ctx.sender_domain}”${ctx.subject ? `: “${ctx.subject}”` : ''}.`
         : ctx.amount ? `A ${money(ctx.amount)} payment by customer ${ctx.user_id} was flagged as unusual.` : `New alert from ${c.source}.` });
     return ['out'];
+  }
+
+  if (node.type === 'band') {
+    const score = Number(ctx.risk_score) || 0;
+    const low = Number(c.low), high = Number(c.high);
+    const port = score < low ? 'low' : score < high ? 'medium' : 'high';
+    log({ kind: 'info', nodeId: node.id, msg: `risk_score ${score} → ${port} (low < ${low}, high ≥ ${high})` });
+    const next = wf.edges.find((e) => e.from === node.id && e.fromPort === port);
+    narrate({ icon: '🚦', cat: 'control', title: `${node.label}: ${port} risk`,
+      text: `Risk score ${score} ${port === 'low' ? `is below ${low}` : port === 'medium' ? `is between ${low} and ${high - 1}` : `is ${high} or more`}${next ? ` → ${getNode(next.to).label}` : ''}.` });
+    return [port];
   }
 
   if (node.type === 'decision') {
@@ -2738,23 +2859,38 @@ async function showWelcome() {
   story = [];
   panelTab = 'story';
   scenario = 'fraud';
+  scenarioVariant = null;
+  visitorRules = {}; // the next visitor starts from the booth defaults
   $('#kioskSpeed').value = 'normal';
   setFollow(true);
   setPanel('left', true);
   setPanel('right', true);
-  setWorkflow(buildTemplate('fraud'));
+  setWorkflow(freshWorkflow('fraud'));
   $('#welcome').hidden = false;
 }
 
-async function startScenario(name) {
+const BOOTH_KEY = 'iws.booth.v1';
+const boothRules = () => { try { return JSON.parse(localStorage.getItem(BOOTH_KEY)); } catch { return null; } };
+
+// A scenario's workflow: template + chosen case version + booth defaults + this visitor's band edits
+function freshWorkflow(name, variantId = scenarioVariant) {
+  const w = buildTemplate(name);
+  const v = VARIANTS[name]?.find((x) => x.id === variantId) || VARIANTS[name]?.[0];
+  if (v) w.nodes.find((n) => n.type === 'trigger').config.payload = JSON.stringify(v.payload, null, 2);
+  if (KIOSK) w.nodes.filter((n) => n.type === 'band').forEach((n) => Object.assign(n.config, boothRules() || {}, visitorRules[name] || {}));
+  return w;
+}
+
+async function startScenario(name, variantId) {
   await stopRun();
   $('#welcome').hidden = true;
   $('#outcome').hidden = true;
   scenario = name;
+  scenarioVariant = variantId || VARIANTS[name]?.[0]?.id || null;
   story = [];
   panelTab = 'story';
   buildRan = false;
-  setWorkflow(buildTemplate(name));
+  setWorkflow(freshWorkflow(name));
   if (name === 'build') return toast('Drag components from the left between the alert and the outcome. The checklist on the right shows the steps.');
   await sleep(600); // let visitors see the map before it starts moving
   runWorkflow();
@@ -2794,7 +2930,7 @@ function showOutcome(ctx, startedAt) {
 
 $('#welcome').addEventListener('click', (ev) => {
   const card = ev.target.closest('[data-scenario]');
-  if (card) return startScenario(card.dataset.scenario);
+  if (card) return startScenario(card.dataset.scenario, ev.target.closest('[data-variant]')?.dataset.variant);
   if (ev.target === ev.currentTarget || ev.target.closest('[data-close]')) closeWelcome();
 });
 $('#outcome').addEventListener('click', (ev) => {
@@ -2805,7 +2941,7 @@ function closeWelcome() { $('#welcome').hidden = true; }
 function closeOutcome() { $('#outcome').hidden = true; panelTab = 'story'; renderInspector(); }
 $('#btnAgain').onclick = showWelcome;
 $('#btnEdit').onclick = () => { $('#outcome').hidden = true; panelTab = 'settings'; renderInspector(); toast('Drag components from the left, or click a step to change it. Then press Run.'); };
-function resetToOriginal() { if (!run.active) { story = []; setWorkflow(buildTemplate(scenario), { keepUndo: true }); toast('Workflow reset. Undo brings your changes back.'); } }
+function resetToOriginal() { if (!run.active) { story = []; setWorkflow(freshWorkflow(scenario), { keepUndo: true }); toast('Workflow reset. Undo brings your changes back.'); } }
 $('#btnReset').onclick = resetToOriginal;
 $('#btnAlone').onclick = () => setAiAlone(!wf.aiAlone);
 function applyTheme(dark) {
