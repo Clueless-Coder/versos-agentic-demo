@@ -1170,7 +1170,7 @@ const SETUP_PRESETS = {
     { id: 'abroad', label: 'Abroad, no travel notice', setup: { amount: 18000, phone_gps: 'lisbon', ip_location: 'lisbon', vpn: false, new_device: false, hour: 21, merchant_type: 'new', travel_notice: false } },
   ],
   ato: [
-    { id: 'stolen', label: 'Fraudster with a stolen password', setup: { device: 'new', rooted: false, remote_access: false, network: 'vpn', ip_location: 'bucharest', linked_accounts: 12, password_entry: 'pasted', familiarity: 'unfamiliar', hesitation: 'none', on_call: false, sim_swap: '24h', after_login: 'payee', amount: 10550 } },
+    { id: 'stolen', label: 'Fraudster with a stolen password', setup: { device: 'new', rooted: false, remote_access: false, network: 'normal', ip_location: 'riyadh', linked_accounts: 3, password_entry: 'pasted', familiarity: 'unfamiliar', hesitation: 'none', on_call: false, sim_swap: '24h', after_login: 'payee', amount: 10550 } },
     { id: 'coached', label: 'Customer coached by a scammer', setup: { device: 'usual', rooted: false, remote_access: true, network: 'normal', ip_location: 'riyadh', linked_accounts: 0, password_entry: 'typed', familiarity: 'familiar', hesitation: 'heavy', on_call: true, sim_swap: 'no', after_login: 'payee', amount: 25000 } },
     { id: 'newphone', label: 'New phone, genuine customer', setup: { device: 'new', rooted: false, remote_access: false, network: 'normal', ip_location: 'riyadh', linked_accounts: 0, password_entry: 'typed', familiarity: 'familiar', hesitation: 'none', on_call: false, sim_swap: 'no', after_login: 'contact', amount: 5000 } },
     { id: 'normal', label: 'Normal login', setup: { device: 'usual', rooted: false, remote_access: false, network: 'normal', ip_location: 'riyadh', linked_accounts: 0, password_entry: 'typed', familiarity: 'familiar', hesitation: 'none', on_call: false, sim_swap: 'no', after_login: 'none', amount: 5000 } },
@@ -1255,24 +1255,24 @@ function riskBreakdown(c) {
   } else if (c.case === 'session') {
     const loc = LOCS[c.ip_location] || LOCS.riyadh;
     add(10, 'login flagged for review');
-    if (c.device === 'new') add(20, 'a device the customer has never used');
-    if (c.device === 'emulator') add(30, 'an emulator, not a real phone');
-    if (c.rooted) add(10, 'rooted / jailbroken device');
-    if (c.remote_access) add(30, 'a remote-access app was running during the session');
-    if (c.network === 'vpn') add(12, 'connection hidden behind a VPN / proxy');
-    if (loc.country !== 'SA') add(15, `connection from ${loc.city}, ${country(loc.country)}`);
-    if (c.linked_accounts >= 5) add(20, `device seen on ${c.linked_accounts} other customers’ accounts`);
-    else if (c.linked_accounts > 0) add(8, `device seen on ${c.linked_accounts} other account${c.linked_accounts === 1 ? '' : 's'}`);
-    if (c.password_entry === 'pasted') add(12, 'password pasted, not typed');
-    if (c.password_entry === 'script') add(25, 'fields filled instantly, like a script');
-    if (c.familiarity === 'unfamiliar') add(15, 'slow, uneven typing of the customer’s own details');
-    if (c.hesitation === 'some') add(8, 'pauses and window-switching');
-    if (c.hesitation === 'heavy') add(18, 'long pauses and window-switching, as if being guided');
-    if (c.on_call) add(25, 'customer was on a phone call during the session');
-    if (c.sim_swap === '7d') add(15, 'SIM swapped within the last 7 days');
-    if (c.sim_swap === '24h') add(30, 'SIM swapped in the last 24 hours: one-time codes could be intercepted');
+    if (c.device === 'new') add(18, 'a device the customer has never used');
+    if (c.device === 'emulator') add(25, 'an emulator, not a real phone');
+    if (c.rooted) add(8, 'rooted / jailbroken device');
+    if (c.remote_access) add(25, 'a remote-access app was running during the session');
+    if (c.network === 'vpn') add(8, 'connection hidden behind a VPN / proxy');
+    if (loc.country !== 'SA') add(10, `connection from ${loc.city}, ${country(loc.country)}`);
+    if (c.linked_accounts >= 5) add(15, `device seen on ${c.linked_accounts} other customers’ accounts`);
+    else if (c.linked_accounts > 0) add(6, `device seen on ${c.linked_accounts} other account${c.linked_accounts === 1 ? '' : 's'}`);
+    if (c.password_entry === 'pasted') add(10, 'password pasted, not typed');
+    if (c.password_entry === 'script') add(20, 'fields filled instantly, like a script');
+    if (c.familiarity === 'unfamiliar') add(10, 'slow, uneven typing of the customer’s own details');
+    if (c.hesitation === 'some') add(6, 'pauses and window-switching');
+    if (c.hesitation === 'heavy') add(12, 'long pauses and window-switching, as if being guided');
+    if (c.on_call) add(20, 'customer was on a phone call during the session');
+    if (c.sim_swap === '7d') add(10, 'SIM swapped within the last 7 days');
+    if (c.sim_swap === '24h') add(20, 'SIM swapped in the last 24 hours: one-time codes could be intercepted');
     if (c.after_login === 'contact') add(15, 'changed the phone number or email');
-    if (c.after_login === 'payee') add(15 + Math.min(15, c.amount / 2000), `added a new payee and sent ${money(c.amount)}`);
+    if (c.after_login === 'payee') add(10 + Math.min(10, c.amount / 2500), `added a new payee and sent ${money(c.amount)}`);
   }
   return { score: clamp(items.reduce((t, [p]) => t + p, 0), 0, 99), items };
 }
