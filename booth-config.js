@@ -39,7 +39,6 @@ window.BOOTH_CONFIG = {
     // remoteAccess: false,       // true | false: a remote-access / screen-sharing app is running
     // network: 'normal',         // normal | vpn
     // connectionFrom: 'riyadh',    // riyadh | jeddah | dubai | lisbon | london | bucharest
-    // deviceOnOtherAccounts: 3,  // 0 to 20 (ignored for the customer's usual phone)
     // passwordEntry: 'pasted',   // typed | pasted | script
     // ownDetailsTyping: 'unfamiliar', // familiar | unfamiliar
     // pausesAndSwitching: 'none', // none | some | heavy

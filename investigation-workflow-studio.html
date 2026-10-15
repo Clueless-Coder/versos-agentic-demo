@@ -1170,10 +1170,10 @@ const SETUP_PRESETS = {
     { id: 'abroad', label: 'Abroad, no travel notice', setup: { amount: 18000, phone_gps: 'lisbon', ip_location: 'lisbon', vpn: false, new_device: false, hour: 21, merchant_type: 'new', travel_notice: false } },
   ],
   ato: [
-    { id: 'stolen', label: 'Fraudster with a stolen password', setup: { device: 'new', rooted: false, remote_access: false, network: 'normal', ip_location: 'riyadh', linked_accounts: 3, password_entry: 'pasted', familiarity: 'unfamiliar', hesitation: 'none', on_call: false, sim_swap: '24h', after_login: 'payee', amount: 10550 } },
-    { id: 'coached', label: 'Customer coached by a scammer', setup: { device: 'usual', rooted: false, remote_access: true, network: 'normal', ip_location: 'riyadh', linked_accounts: 0, password_entry: 'typed', familiarity: 'familiar', hesitation: 'heavy', on_call: true, sim_swap: 'no', after_login: 'payee', amount: 25000 } },
-    { id: 'newphone', label: 'New phone, genuine customer', setup: { device: 'new', rooted: false, remote_access: false, network: 'normal', ip_location: 'riyadh', linked_accounts: 0, password_entry: 'typed', familiarity: 'familiar', hesitation: 'none', on_call: false, sim_swap: 'no', after_login: 'contact', amount: 5000 } },
-    { id: 'normal', label: 'Normal login', setup: { device: 'usual', rooted: false, remote_access: false, network: 'normal', ip_location: 'riyadh', linked_accounts: 0, password_entry: 'typed', familiarity: 'familiar', hesitation: 'none', on_call: false, sim_swap: 'no', after_login: 'none', amount: 5000 } },
+    { id: 'stolen', label: 'Fraudster with a stolen password', setup: { device: 'new', rooted: false, remote_access: false, network: 'normal', ip_location: 'riyadh', password_entry: 'pasted', familiarity: 'unfamiliar', hesitation: 'none', on_call: false, sim_swap: '24h', after_login: 'payee', amount: 10550 } },
+    { id: 'coached', label: 'Customer coached by a scammer', setup: { device: 'usual', rooted: false, remote_access: true, network: 'normal', ip_location: 'riyadh', password_entry: 'typed', familiarity: 'familiar', hesitation: 'heavy', on_call: true, sim_swap: 'no', after_login: 'payee', amount: 25000 } },
+    { id: 'newphone', label: 'New phone, genuine customer', setup: { device: 'new', rooted: false, remote_access: false, network: 'normal', ip_location: 'riyadh', password_entry: 'typed', familiarity: 'familiar', hesitation: 'none', on_call: false, sim_swap: 'no', after_login: 'contact', amount: 5000 } },
+    { id: 'normal', label: 'Normal login', setup: { device: 'usual', rooted: false, remote_access: false, network: 'normal', ip_location: 'riyadh', password_entry: 'typed', familiarity: 'familiar', hesitation: 'none', on_call: false, sim_swap: 'no', after_login: 'none', amount: 5000 } },
   ],
 };
 
@@ -1194,7 +1194,6 @@ const SETUP_FIELDS = {
     { key: 'remote_access', label: 'Remote-access / screen-sharing app running', type: 'toggle' },
     { key: 'network', label: 'Network', type: 'segment', options: () => [['normal', 'Normal'], ['vpn', 'VPN / proxy']] },
     { key: 'ip_location', label: 'Connection location', type: 'select', options: () => Object.keys(LOCS).map((k) => [k, `${LOCS[k].city}, ${country(LOCS[k].country)}`]) },
-    { key: 'linked_accounts', label: 'Device seen on other customers’ accounts', type: 'range', min: 0, max: 20, step: 1, fmt: (v) => String(v), disabled: (s) => s.device === 'usual', help: 'The customer’s own phone isn’t shared' },
     { key: 'password_entry', label: 'Password entered', type: 'segment', options: () => [['typed', 'Typed fluently'], ['pasted', 'Pasted'], ['script', 'Filled instantly']] },
     { key: 'familiarity', label: 'Typing the customer’s own details', type: 'segment', options: () => [['familiar', 'Familiar'], ['unfamiliar', 'Slow & uneven']] },
     { key: 'hesitation', label: 'Pauses and window-switching', type: 'segment', options: () => [['none', 'None'], ['some', 'Some'], ['heavy', 'Heavy']] },
@@ -1211,7 +1210,6 @@ function normalizeSetup(name, s) {
   if (name === 'fraud' && LOCS[s.phone_gps]?.country === 'SA') s.travel_notice = false;
   if (name === 'ato') {
     if (s.device === 'emulator') s.rooted = false;
-    if (s.device === 'usual') s.linked_accounts = 0;
   }
   return s;
 }
@@ -1261,8 +1259,6 @@ function riskBreakdown(c) {
     if (c.remote_access) add(25, 'a remote-access app was running during the session');
     if (c.network === 'vpn') add(8, 'connection hidden behind a VPN / proxy');
     if (loc.country !== 'SA') add(10, `connection from ${loc.city}, ${country(loc.country)}`);
-    if (c.linked_accounts >= 5) add(15, `device seen on ${c.linked_accounts} other customers’ accounts`);
-    else if (c.linked_accounts > 0) add(6, `device seen on ${c.linked_accounts} other account${c.linked_accounts === 1 ? '' : 's'}`);
     if (c.password_entry === 'pasted') add(10, 'password pasted, not typed');
     if (c.password_entry === 'script') add(20, 'fields filled instantly, like a script');
     if (c.familiarity === 'unfamiliar') add(10, 'slow, uneven typing of the customer’s own details');
@@ -1291,7 +1287,7 @@ function caseEvidence(c) {
     const loc = LOCS[c.ip_location];
     return [['Customer', c.user_id], ['Device', { usual: 'Customer’s usual phone', new: 'New device', emulator: 'Emulator' }[c.device]],
       ['Rooted / jailbroken', yes(c.rooted)], ['Remote-access app', yes(c.remote_access)], ['Network', c.network === 'vpn' ? 'VPN / proxy' : 'Normal'],
-      ['Connection from', `${loc.city}, ${country(loc.country)}`], ['Device on other accounts', c.linked_accounts],
+      ['Connection from', `${loc.city}, ${country(loc.country)}`],
       ['Password', { typed: 'Typed fluently', pasted: 'Pasted', script: 'Filled instantly' }[c.password_entry]],
       ['Own details typed', c.familiarity === 'familiar' ? 'Familiar' : 'Slow & uneven'], ['Pauses / window-switching', { none: 'None', some: 'Some', heavy: 'Heavy' }[c.hesitation]],
       ['On a phone call', yes(c.on_call)], ['SIM swapped', { no: 'No', '7d': 'Within 7 days', '24h': 'Within 24 hours' }[c.sim_swap]],
@@ -1308,7 +1304,7 @@ function setupSummary(c) {
   }
   if (c.case === 'session') {
     return [{ usual: 'usual phone', new: 'new device', emulator: 'emulator' }[c.device], c.rooted && 'rooted', c.remote_access && 'remote access',
-      c.network === 'vpn' && 'VPN', LOCS[c.ip_location].city, c.linked_accounts && `${c.linked_accounts} linked accounts`,
+      c.network === 'vpn' && 'VPN', LOCS[c.ip_location].city,
       c.password_entry !== 'typed' && `password ${c.password_entry}`, c.familiarity === 'unfamiliar' && 'unfamiliar typing',
       c.hesitation !== 'none' && `${c.hesitation} hesitation`, c.on_call && 'on a call', c.sim_swap !== 'no' && `SIM swap ${c.sim_swap}`,
       { none: 'no changes', contact: 'contact changed', payee: `payee + ${money(c.amount)}` }[c.after_login]].filter(Boolean).join(' · ');
@@ -2459,7 +2455,7 @@ function mockFetch(node, ctx) {
   }
   if (ctx.case === 'session') {
     const loc = LOCS[ctx.ip_location];
-    if (node.type === 'ds_device') return { device: ctx.device, emulator: ctx.device === 'emulator', rooted: !!ctx.rooted, remote_access_app: !!ctx.remote_access, other_accounts: ctx.linked_accounts };
+    if (node.type === 'ds_device') return { device: ctx.device, emulator: ctx.device === 'emulator', rooted: !!ctx.rooted, remote_access_app: !!ctx.remote_access };
     if (node.type === 'ds_behaviour') return { password: ctx.password_entry, own_details_typing: ctx.familiarity, pauses_and_window_switching: ctx.hesitation };
     if (node.type === 'ds_phone') return { on_active_call: !!ctx.on_call, sim_swapped: ctx.sim_swap };
     if (node.type === 'ds_session') return { network: ctx.network, city: loc.city, country: loc.country, after_login: ctx.after_login };
@@ -2592,7 +2588,7 @@ function simulateAgent(node, ctx, data) {
     case 'investigator': {
       if (ctx.case === 'session') {
         // Two different attacks: someone else is in the account, or the real customer is being coached
-        const takeover = [ctx.device !== 'usual', ctx.sim_swap !== 'no', ctx.password_entry !== 'typed', ctx.familiarity === 'unfamiliar', ctx.linked_accounts >= 5].filter(Boolean).length;
+        const takeover = [ctx.device !== 'usual', ctx.sim_swap !== 'no', ctx.password_entry !== 'typed', ctx.familiarity === 'unfamiliar'].filter(Boolean).length;
         const scam = [ctx.on_call, ctx.remote_access, ctx.hesitation !== 'none'].filter(Boolean).length;
         const kind = takeover >= 2 ? 'takeover' : scam >= 1 && (ctx.risk_score ?? 0) >= 40 ? 'scam' : null;
         const confidence = round2(clamp(0.72 + (takeover + scam) * 0.04 + rnd(-0.02, 0.02), 0, 0.97));
@@ -3193,7 +3189,7 @@ function configBands() {
 const CONFIG_KEYS = {
   fraud: ['cardPayment', { amount: 'amount', phoneGps: 'phone_gps', connectionFrom: 'ip_location', vpn: 'vpn', newDevice: 'new_device', hour: 'hour', merchant: 'merchant_type', travelNotice: 'travel_notice' }],
   ato: ['accountTakeover', { device: 'device', rooted: 'rooted', remoteAccess: 'remote_access', network: 'network', connectionFrom: 'ip_location',
-    deviceOnOtherAccounts: 'linked_accounts', passwordEntry: 'password_entry', ownDetailsTyping: 'familiarity', pausesAndSwitching: 'hesitation',
+    passwordEntry: 'password_entry', ownDetailsTyping: 'familiarity', pausesAndSwitching: 'hesitation',
     onPhoneCall: 'on_call', simSwap: 'sim_swap', afterLogin: 'after_login', amount: 'amount' }],
 };
 function configSetup(name) {
