@@ -731,7 +731,7 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
       <select id="templateSelect" class="studio-only" aria-label="Load template">
         <option value="">Templates…</option>
         <option value="fraud">Card fraud investigation</option>
-        <option value="ato">Phishing campaign / account takeover</option>
+        <option value="ato">Account takeover & scams</option>
         <option value="blank">Blank workflow</option>
       </select>
       <button id="btnImport" class="btn studio-only">Import</button>
@@ -843,8 +843,8 @@ body.kiosk .modal-actions .btn { font-size: 1.1em; padding: 0.6em 1.5em; }
           <span class="go">Set up &amp; investigate ▶</span>
         </button>
         <button class="scenario" data-scenario="ato">
-          <span class="ic">🎣</span><b>Phishing campaign &amp; account takeover</b>
-          <span>Our system catches a fake “password expires” campaign. Set how early it was caught and what customers did, and see how far the criminals got.</span>
+          <span class="ic">🔐</span><b>Account takeover &amp; scams</b>
+          <span>Someone else is in a customer’s account, or a scammer is talking the customer through a payment. Set the device, network, behaviour, phone call and SIM signals, and see what our system catches.</span>
           <span class="go">Set up &amp; investigate ▶</span>
         </button>
         <button class="scenario build" data-scenario="build">
@@ -994,6 +994,21 @@ const NODE_TYPES = {
     desc: 'Files, emails and attachments',
     defaults: { pii: true },
   },
+  ds_behaviour: {
+    category: 'data', title: 'Behaviour biometrics', icon: '⌨️', inputs: false, outputs: ['data'],
+    desc: 'How the person types, pastes and pauses',
+    defaults: { pii: false },
+  },
+  ds_phone: {
+    category: 'data', title: 'Phone & SIM checks', icon: '📶', inputs: false, outputs: ['data'],
+    desc: 'Active calls and recent SIM swaps',
+    defaults: { pii: false },
+  },
+  ds_session: {
+    category: 'data', title: 'Login & session history', icon: '🔑', inputs: false, outputs: ['data'],
+    desc: 'Network, location and what happened after login',
+    defaults: { pii: false },
+  },
   ds_custom: {
     category: 'data', title: 'Custom Source', icon: '🔌', inputs: false, outputs: ['data'],
     desc: 'Any API, database or file',
@@ -1050,7 +1065,7 @@ const NODE_TYPES = {
   },
 };
 
-const OUTCOMES = ['Close – no action', 'Close – confirmed fraud', 'Block card', 'Block card – known scam', 'Block account', 'Release payment', 'Contain & reset credentials', 'Reset password only', 'Close – no takeover', 'Close – campaign blocked', 'Escalate – senior investigator', 'Hold & escalate', 'Hold payment & text customer', 'File SAR', 'Refer to compliance'];
+const OUTCOMES = ['Close – no action', 'Close – confirmed fraud', 'Block card', 'Block card – known scam', 'Block account', 'Release payment', 'Contain & reset credentials', 'Reset password only', 'Stop payment', 'Close – no takeover', 'Close – campaign blocked', 'Escalate – senior investigator', 'Hold & escalate', 'Hold payment & text customer', 'File SAR', 'Refer to compliance'];
 
 // A node's outputs: its choices for human steps, otherwise the type's fixed outputs
 const choicesOf = (node) => node.config?.choices?.length ? node.config.choices : NODE_TYPES[node.type].outputs.map((p) => ({ port: p, short: p, label: p[0].toUpperCase() + p.slice(1) }));
@@ -1059,12 +1074,16 @@ const portShort = (node, port) => choicesOf(node).find((c) => c.port === port)?.
 
 // What the AI's evidence points to, and which choice it would pick
 function aiView(ctx) {
+  if (ctx.scam_kind) return ctx.scam_kind; // 'takeover' | 'scam'
   if (ctx.verdict) return ctx.verdict === 'FRAUD' ? 'fraud' : 'genuine';
   if (ctx.compromised != null) return ctx.compromised ? 'fraud' : 'genuine';
   if (ctx.risk_score != null) return ctx.risk_score >= 60 ? 'fraud' : 'genuine';
   return null;
 }
-const aiPick = (node, ctx) => { const ch = choicesOf(node), v = aiView(ctx); return ch.find((c) => c.ai === 'any') || (v && ch.find((c) => c.ai === v)) || null; };
+const aiPick = (node, ctx) => {
+  const ch = choicesOf(node), v = aiView(ctx);
+  return ch.find((c) => c.ai === 'any') || (v && (ch.find((c) => c.ai === v) || (['takeover', 'scam'].includes(v) && ch.find((c) => c.ai === 'fraud')))) || null;
+};
 
 // Step settings: only what changes how a case runs. Triggers, decisions and risk bands are set
 // with their own controls (case setup, rule slider, band sliders), shown separately.
@@ -1102,6 +1121,9 @@ const PLAIN = {
   ds_siem: 'Security logs: sign-ins, failed logins and password resets',
   ds_threatintel: 'Known scams and criminal infrastructure',
   ds_documents: 'Files and emails attached to the case',
+  ds_behaviour: 'How the person types, pastes and pauses while using the app',
+  ds_phone: 'Whether the customer is on a call, and recent SIM swaps',
+  ds_session: 'Network, location and what was changed after login',
   ds_custom: 'Another data source',
   agent_triage: 'Scores how risky the alert is',
   agent_enrichment: 'Gathers context and spots what looks unusual',
@@ -1137,7 +1159,6 @@ const LOCS = {
   london: { city: 'London', country: 'GB' }, bucharest: { city: 'Bucharest', country: 'RO' },
 };
 const MERCHANTS = { regular: 'Regular supermarket', new: 'New online shop', crypto: 'Crypto exchange' };
-const CAUGHT = ['before delivery', 'after 10 minutes', 'after 30 minutes', 'after 1 hour', 'after 2 hours', 'after 6 hours'];
 const pad2 = (h) => String(h).padStart(2, '0');
 
 const SETUP_PRESETS = {
@@ -1149,9 +1170,10 @@ const SETUP_PRESETS = {
     { id: 'abroad', label: 'Abroad, no travel notice', setup: { amount: 18000, phone_gps: 'lisbon', ip_location: 'lisbon', vpn: false, new_device: false, hour: 21, merchant_type: 'new', travel_notice: false } },
   ],
   ato: [
-    { id: 'breakin', label: 'Break-in', setup: { emails_sent: 1240, caught: 4, clicked: 37, password_entered: true, mfa: false, new_device_login: true, new_payees: true } },
-    { id: 'phished', label: 'Passwords phished', setup: { emails_sent: 1240, caught: 2, clicked: 12, password_entered: true, mfa: false, new_device_login: false, new_payees: false } },
-    { id: 'blocked', label: 'Blocked on arrival', setup: { emails_sent: 1240, caught: 0, clicked: 0, password_entered: false, mfa: true, new_device_login: false, new_payees: false } },
+    { id: 'stolen', label: 'Fraudster with a stolen password', setup: { device: 'new', rooted: false, remote_access: false, network: 'vpn', ip_location: 'bucharest', linked_accounts: 12, password_entry: 'pasted', familiarity: 'unfamiliar', hesitation: 'none', on_call: false, sim_swap: '24h', after_login: 'payee', amount: 10550 } },
+    { id: 'coached', label: 'Customer coached by a scammer', setup: { device: 'usual', rooted: false, remote_access: true, network: 'normal', ip_location: 'riyadh', linked_accounts: 0, password_entry: 'typed', familiarity: 'familiar', hesitation: 'heavy', on_call: true, sim_swap: 'no', after_login: 'payee', amount: 25000 } },
+    { id: 'newphone', label: 'New phone, genuine customer', setup: { device: 'new', rooted: false, remote_access: false, network: 'normal', ip_location: 'riyadh', linked_accounts: 0, password_entry: 'typed', familiarity: 'familiar', hesitation: 'none', on_call: false, sim_swap: 'no', after_login: 'contact', amount: 5000 } },
+    { id: 'normal', label: 'Normal login', setup: { device: 'usual', rooted: false, remote_access: false, network: 'normal', ip_location: 'riyadh', linked_accounts: 0, password_entry: 'typed', familiarity: 'familiar', hesitation: 'none', on_call: false, sim_swap: 'no', after_login: 'none', amount: 5000 } },
   ],
 };
 
@@ -1167,13 +1189,19 @@ const SETUP_FIELDS = {
     { key: 'travel_notice', label: 'Travel notice on file', type: 'toggle', disabled: (s) => LOCS[s.phone_gps]?.country === 'SA', help: 'Matters only when the phone is abroad' },
   ],
   ato: [
-    { key: 'emails_sent', label: 'Fake emails sent', type: 'range', min: 100, max: 10000, step: 100, fmt: (v) => Number(v).toLocaleString('en-US') },
-    { key: 'caught', label: 'Our system quarantined them', type: 'range', min: 0, max: 5, step: 1, fmt: (v) => CAUGHT[v] },
-    { key: 'clicked', label: 'Customers who clicked', type: 'range', min: 0, max: 100, step: 1, fmt: (v) => String(v), disabled: (s) => s.caught === 0, help: 'Nobody can click if it’s caught before delivery' },
-    { key: 'password_entered', label: 'They typed their password into the fake page', type: 'toggle', disabled: (s) => !s.clicked },
-    { key: 'mfa', label: 'MFA (one-time codes) switched on', type: 'toggle' },
-    { key: 'new_device_login', label: 'A login from a new device after the click', type: 'toggle', disabled: (s) => !s.clicked || (s.mfa && s.password_entered), help: 'MFA stops a login with a stolen password' },
-    { key: 'new_payees', label: 'Payments to new payees after that login', type: 'toggle', disabled: (s) => !s.new_device_login },
+    { key: 'device', label: 'Device', type: 'segment', options: () => [['usual', 'Customer’s usual phone'], ['new', 'New device'], ['emulator', 'Emulator']] },
+    { key: 'rooted', label: 'Rooted / jailbroken device', type: 'toggle', disabled: (s) => s.device === 'emulator', help: 'An emulator is already flagged as not a real phone' },
+    { key: 'remote_access', label: 'Remote-access / screen-sharing app running', type: 'toggle' },
+    { key: 'network', label: 'Network', type: 'segment', options: () => [['normal', 'Normal'], ['vpn', 'VPN / proxy']] },
+    { key: 'ip_location', label: 'Connection location', type: 'select', options: () => Object.keys(LOCS).map((k) => [k, `${LOCS[k].city}, ${country(LOCS[k].country)}`]) },
+    { key: 'linked_accounts', label: 'Device seen on other customers’ accounts', type: 'range', min: 0, max: 20, step: 1, fmt: (v) => String(v), disabled: (s) => s.device === 'usual', help: 'The customer’s own phone isn’t shared' },
+    { key: 'password_entry', label: 'Password entered', type: 'segment', options: () => [['typed', 'Typed fluently'], ['pasted', 'Pasted'], ['script', 'Filled instantly']] },
+    { key: 'familiarity', label: 'Typing the customer’s own details', type: 'segment', options: () => [['familiar', 'Familiar'], ['unfamiliar', 'Slow & uneven']] },
+    { key: 'hesitation', label: 'Pauses and window-switching', type: 'segment', options: () => [['none', 'None'], ['some', 'Some'], ['heavy', 'Heavy']] },
+    { key: 'on_call', label: 'Customer on a phone call during the session', type: 'toggle' },
+    { key: 'sim_swap', label: 'SIM swapped recently', type: 'segment', options: () => [['no', 'No'], ['7d', 'Within 7 days'], ['24h', 'Within 24 hours']] },
+    { key: 'after_login', label: 'After logging in', type: 'segment', options: () => [['none', 'Nothing'], ['contact', 'Changed phone/email'], ['payee', 'New payee + payment']] },
+    { key: 'amount', label: 'Payment amount', type: 'range', min: 1000, max: 50000, step: 500, fmt: (v) => money(v), disabled: (s) => s.after_login !== 'payee', help: 'Only when a payment is made' },
   ],
 };
 
@@ -1182,10 +1210,8 @@ function normalizeSetup(name, s) {
   s = { ...s };
   if (name === 'fraud' && LOCS[s.phone_gps]?.country === 'SA') s.travel_notice = false;
   if (name === 'ato') {
-    if (s.caught === 0) s.clicked = 0;
-    if (!s.clicked) { s.password_entered = false; s.new_device_login = false; }
-    if (s.mfa && s.password_entered) s.new_device_login = false; // MFA blocks the stolen-password login
-    if (!s.new_device_login) s.new_payees = false;
+    if (s.device === 'emulator') s.rooted = false;
+    if (s.device === 'usual') s.linked_accounts = 0;
   }
   return s;
 }
@@ -1199,9 +1225,7 @@ function casePayload(name, setup) {
       merchant_type: s.merchant_type, phone_gps: s.phone_gps, ip_location: s.ip_location, vpn: s.vpn, new_device: s.new_device,
       hour: s.hour, travel_notice: s.travel_notice };
   }
-  return { case: 'phishing', campaign_domain: 'yourbank-secure-login.example', subject: 'Your password expires today', user_id: 'usr_31877',
-    emails_sent: s.emails_sent, caught: s.caught, clicked: s.clicked, password_entered: s.password_entered, mfa: s.mfa,
-    new_device_login: s.new_device_login, new_payees: s.new_payees };
+  return { case: 'session', user_id: 'usr_31877', ...s };
 }
 
 const setupFromPayload = (name, p) => Object.fromEntries(SETUP_FIELDS[name].map((f) => [f.key, p[f.key]]));
@@ -1228,16 +1252,27 @@ function riskBreakdown(c) {
     if (c.merchant_type === 'crypto') add(12, 'paid to a crypto exchange');
     else if (c.merchant_type === 'new') add(4, 'a merchant the customer has never used');
     else add(-5, 'a shop the customer uses regularly');
-  } else if (c.case === 'phishing') {
-    add(20, `campaign impersonating the bank (${c.campaign_domain})`);
-    add([-15, 0, 3, 6, 10, 15][c.caught] ?? 0, `quarantined ${CAUGHT[c.caught]}`);
-    if (c.clicked > 0) {
-      add(Math.min(20, c.clicked * 0.6), `${c.clicked} customer${c.clicked === 1 ? '' : 's'} clicked the link`);
-      if (c.password_entered) add(15, 'passwords were typed into the fake page');
-      if (c.password_entered && c.mfa) add(-20, 'MFA blocks logins with a stolen password');
-      if (c.new_device_login) add(25, 'a login from a new device right after the click');
-      if (c.new_payees) add(20, 'payments to new payees after that login');
-    } else add(0, 'nobody clicked');
+  } else if (c.case === 'session') {
+    const loc = LOCS[c.ip_location] || LOCS.riyadh;
+    add(10, 'login flagged for review');
+    if (c.device === 'new') add(20, 'a device the customer has never used');
+    if (c.device === 'emulator') add(30, 'an emulator, not a real phone');
+    if (c.rooted) add(10, 'rooted / jailbroken device');
+    if (c.remote_access) add(30, 'a remote-access app was running during the session');
+    if (c.network === 'vpn') add(12, 'connection hidden behind a VPN / proxy');
+    if (loc.country !== 'SA') add(15, `connection from ${loc.city}, ${country(loc.country)}`);
+    if (c.linked_accounts >= 5) add(20, `device seen on ${c.linked_accounts} other customers’ accounts`);
+    else if (c.linked_accounts > 0) add(8, `device seen on ${c.linked_accounts} other account${c.linked_accounts === 1 ? '' : 's'}`);
+    if (c.password_entry === 'pasted') add(12, 'password pasted, not typed');
+    if (c.password_entry === 'script') add(25, 'fields filled instantly, like a script');
+    if (c.familiarity === 'unfamiliar') add(15, 'slow, uneven typing of the customer’s own details');
+    if (c.hesitation === 'some') add(8, 'pauses and window-switching');
+    if (c.hesitation === 'heavy') add(18, 'long pauses and window-switching, as if being guided');
+    if (c.on_call) add(25, 'customer was on a phone call during the session');
+    if (c.sim_swap === '7d') add(15, 'SIM swapped within the last 7 days');
+    if (c.sim_swap === '24h') add(30, 'SIM swapped in the last 24 hours: one-time codes could be intercepted');
+    if (c.after_login === 'contact') add(15, 'changed the phone number or email');
+    if (c.after_login === 'payee') add(15 + Math.min(15, c.amount / 2000), `added a new payee and sent ${money(c.amount)}`);
   }
   return { score: clamp(items.reduce((t, [p]) => t + p, 0), 0, 99), items };
 }
@@ -1252,9 +1287,17 @@ function caseEvidence(c) {
       ['VPN', yes(c.vpn)], ['New device', yes(c.new_device)], ['Time', `${pad2(c.hour)}:00`],
       ...(LOCS[c.phone_gps].country !== 'SA' ? [['Travel notice', yes(c.travel_notice)]] : [])];
   }
-  return [['Phishing domain', c.campaign_domain], ['Fake emails', Number(c.emails_sent).toLocaleString('en-US')],
-    ['Quarantined', CAUGHT[c.caught]], ['Customers who clicked', c.clicked], ['Passwords entered', yes(c.password_entered)],
-    ['MFA on', yes(c.mfa)], ['New-device login', yes(c.new_device_login)], ['Payments to new payees', yes(c.new_payees)]];
+  if (c.case === 'session') {
+    const loc = LOCS[c.ip_location];
+    return [['Customer', c.user_id], ['Device', { usual: 'Customer’s usual phone', new: 'New device', emulator: 'Emulator' }[c.device]],
+      ['Rooted / jailbroken', yes(c.rooted)], ['Remote-access app', yes(c.remote_access)], ['Network', c.network === 'vpn' ? 'VPN / proxy' : 'Normal'],
+      ['Connection from', `${loc.city}, ${country(loc.country)}`], ['Device on other accounts', c.linked_accounts],
+      ['Password', { typed: 'Typed fluently', pasted: 'Pasted', script: 'Filled instantly' }[c.password_entry]],
+      ['Own details typed', c.familiarity === 'familiar' ? 'Familiar' : 'Slow & uneven'], ['Pauses / window-switching', { none: 'None', some: 'Some', heavy: 'Heavy' }[c.hesitation]],
+      ['On a phone call', yes(c.on_call)], ['SIM swapped', { no: 'No', '7d': 'Within 7 days', '24h': 'Within 24 hours' }[c.sim_swap]],
+      ['After login', { none: 'Nothing', contact: 'Changed phone/email', payee: `New payee + ${money(c.amount)}` }[c.after_login]]];
+  }
+  return [];
 }
 
 // One-line summary for the "same case, different run" table
@@ -1263,14 +1306,17 @@ function setupSummary(c) {
     return [money(c.amount), `${LOCS[c.phone_gps].city}→${LOCS[c.ip_location].city}`, c.vpn && 'VPN', c.new_device && 'new device',
       `${pad2(c.hour)}:00`, MERCHANTS[c.merchant_type].toLowerCase(), c.travel_notice && 'travel notice'].filter(Boolean).join(' · ');
   }
-  if (c.case === 'phishing') {
-    return [`${Number(c.emails_sent).toLocaleString('en-US')} emails`, CAUGHT[c.caught], `${c.clicked} clicked`, c.password_entered && 'passwords',
-      c.mfa && 'MFA', c.new_device_login && 'new login', c.new_payees && 'new payees'].filter(Boolean).join(' · ');
+  if (c.case === 'session') {
+    return [{ usual: 'usual phone', new: 'new device', emulator: 'emulator' }[c.device], c.rooted && 'rooted', c.remote_access && 'remote access',
+      c.network === 'vpn' && 'VPN', LOCS[c.ip_location].city, c.linked_accounts && `${c.linked_accounts} linked accounts`,
+      c.password_entry !== 'typed' && `password ${c.password_entry}`, c.familiarity === 'unfamiliar' && 'unfamiliar typing',
+      c.hesitation !== 'none' && `${c.hesitation} hesitation`, c.on_call && 'on a call', c.sim_swap !== 'no' && `SIM swap ${c.sim_swap}`,
+      { none: 'no changes', contact: 'contact changed', payee: `payee + ${money(c.amount)}` }[c.after_login]].filter(Boolean).join(' · ');
   }
   return null;
 }
 
-const SCENARIO_NAMES = { fraud: 'Card payment', ato: 'Phishing campaign & account takeover', build: 'Build your own' };
+const SCENARIO_NAMES = { fraud: 'Card payment', ato: 'Account takeover & scams', build: 'Build your own' };
 const NEXT_SCENARIO = { fraud: 'ato', ato: 'build', build: 'fraud' };
 // Saudi riyal, written as "SAR" (the new riyal sign isn't in most fonts yet)
 const COUNTRIES = { SA: 'Saudi Arabia', RO: 'Romania', PT: 'Portugal', AE: 'UAE', GB: 'United Kingdom', US: 'United States' };
@@ -1282,7 +1328,7 @@ const plainOutcome = (o) => ({
   'File SAR': 'Reported to the authorities', 'Refer to compliance': 'Passed to the compliance team',
   'Close – no action': 'Closed: no fraud found', 'Close – confirmed fraud': 'Closed: fraud confirmed',
   'Contain & reset credentials': 'Account secured', 'Release payment': 'Payment released, case closed',
-  'Reset password only': 'Password reset', 'Close – no takeover': 'Closed: no takeover found',
+  'Reset password only': 'Password reset', 'Stop payment': 'Payment stopped', 'Close – no takeover': 'Closed: no takeover found',
   'Close – campaign blocked': 'Campaign blocked; no customers affected', 'Escalate – senior investigator': 'Escalated to a senior investigator',
   'Hold & escalate': 'Outgoing payments on hold; escalated to a senior investigator', 'Hold payment & text customer': 'Payment on hold',
 }[o] || o);
@@ -1353,54 +1399,57 @@ function buildTemplate(name) {
 
   if (name === 'ato') {
     return {
-      name: 'Phishing campaign & account takeover',
-      description: 'Our system detects a phishing campaign impersonating the bank and checks whether any customer who clicked was broken into. The earlier it catches it, the less is left to do.',
+      name: 'Account takeover & scams',
+      description: 'Our system flags a suspicious session: either someone else has the customer’s login, or the real customer is being coached by a scammer.',
       nodes: [
-        n('t1', 'trigger', 40, 300, 'Phishing campaign detected', { source: 'Email security (automatic detection)', payload: JSON.stringify(casePayload('ato', SETUP_PRESETS.ato[0].setup), null, 2) }),
-        n('d1', 'ds_documents', 300, 60, 'Email security logs'),
-        n('d2', 'ds_threatintel', 540, 60),
-        n('a1', 'agent_triage', 300, 300, 'Phishing triage'),
+        n('t1', 'trigger', 40, 300, 'Suspicious session detected', { source: 'Session monitoring', payload: JSON.stringify(casePayload('ato', SETUP_PRESETS.ato[0].setup), null, 2) }),
+        n('d1', 'ds_device', 260, 40, 'Device intelligence'),
+        n('d2', 'ds_behaviour', 500, 40),
+        n('a1', 'agent_triage', 300, 300, 'Session risk triage'),
         n('c1', 'band', 580, 300, 'Risk bands'),
-        n('d3', 'ds_siem', 840, 60, 'Sign-in logs'),
-        n('d4', 'ds_transactions', 1080, 60, 'Account transactions'),
-        n('a2', 'agent_correlation', 840, 220, 'Account check'),
-        n('h1', 'human_review', 1110, 200, 'Fraud analyst review', {
+        n('d3', 'ds_phone', 840, 20),
+        n('d4', 'ds_session', 1080, 20),
+        n('d5', 'ds_transactions', 1320, 20, 'Account transactions'),
+        n('a2', 'agent_enrichment', 840, 180, 'Session check'),
+        n('a3', 'agent_investigator', 1110, 180, 'Takeover & scam investigator'),
+        n('h1', 'human_review', 1380, 160, 'Fraud analyst review', {
           role: 'Fraud Analyst',
-          instructions: 'The account check has looked at sign-ins and payments since the click (see the evidence). Contact the customer and record what you found: each finding leads to a different outcome.',
+          instructions: 'Contact the customer and record what you found: each finding leads to a different outcome.',
           choices: [
-            { port: 'not_them', short: 'not them', label: 'Customer didn’t log in or make the payments', ai: 'fraud' },
-            { port: 'clicked_only', short: 'clicked only', label: 'Customer clicked the link, but the payments were theirs' },
-            { port: 'genuine', short: 'all genuine', label: 'Customer says the logins and payments were all theirs', ai: 'genuine' },
+            { port: 'not_them', short: 'not them', label: 'Customer didn’t log in: someone else did', ai: 'takeover' },
+            { port: 'coached', short: 'coached', label: 'Customer was being guided by someone on a call', ai: 'scam' },
+            { port: 'genuine', short: 'genuine', label: 'Customer confirms it was them', ai: 'genuine' },
             { port: 'unreachable', short: 'no reply', label: 'Can’t reach the customer' },
           ],
         }),
-        n('o1', 'end', 1420, 0, 'Account secured', { outcome: 'Contain & reset credentials', notify: '#soc-incidents' }),
-        n('o2', 'end', 1420, 130, 'Password reset', { outcome: 'Reset password only' }),
-        n('o3', 'end', 1420, 260, 'No takeover: close', { outcome: 'Close – no takeover' }),
-        n('o4', 'end', 1420, 390, 'Hold payments & escalate', { outcome: 'Hold & escalate' }),
-        n('h2', 'human_review', 840, 400, 'SOC analyst review', {
-          role: 'SOC Analyst',
-          instructions: 'The campaign was quarantined quickly, so the AI scored this medium risk. Decide what to do for the customers who clicked.',
+        n('o1', 'end', 1690, 20, 'Account secured', { outcome: 'Contain & reset credentials', notify: '#soc-incidents' }),
+        n('o2', 'end', 1690, 150, 'Payment stopped', { outcome: 'Stop payment' }),
+        n('o3', 'end', 1690, 280, 'No takeover: close', { outcome: 'Close – no takeover' }),
+        n('o4', 'end', 1690, 410, 'Hold payments & escalate', { outcome: 'Hold & escalate' }),
+        n('h2', 'human_review', 840, 420, 'Analyst review', {
+          role: 'Fraud Analyst',
+          instructions: 'The AI scored this session medium risk, so it comes straight to you. Check with the customer and record your finding.',
           choices: [
-            { port: 'reset', short: 'reset', label: 'Reset passwords for the customers who clicked, as a precaution', ai: 'any' },
-            { port: 'monitor', short: 'monitor', label: 'No sign any account was touched — keep monitoring' },
-            { port: 'unclear', short: 'escalate', label: 'Can’t tell yet — escalate' },
+            { port: 'genuine', short: 'genuine', label: 'Customer confirms it was them (e.g. a new phone)', ai: 'genuine' },
+            { port: 'not_them', short: 'not them', label: 'Customer didn’t log in: someone else did', ai: 'fraud' },
+            { port: 'unclear', short: 'escalate', label: 'Can’t tell yet: escalate' },
           ],
         }),
-        n('o6', 'end', 1150, 340, 'Passwords reset', { outcome: 'Reset password only' }),
-        n('o7', 'end', 1150, 470, 'No takeover: close', { outcome: 'Close – no takeover' }),
-        n('o8', 'end', 1150, 600, 'Escalated', { outcome: 'Escalate – senior investigator' }),
-        n('a3', 'agent_summarizer', 860, 740, 'Auto-close summary'),
-        n('o5', 'end', 1140, 740, 'Campaign blocked', { outcome: 'Close – campaign blocked' }),
+        n('o5', 'end', 1140, 390, 'No takeover: close', { outcome: 'Close – no takeover' }),
+        n('o6', 'end', 1140, 520, 'Account secured', { outcome: 'Contain & reset credentials' }),
+        n('o7', 'end', 1140, 650, 'Escalated', { outcome: 'Escalate – senior investigator' }),
+        n('a4', 'agent_summarizer', 860, 790, 'Auto-close summary'),
+        n('o8', 'end', 1140, 790, 'Normal session: close', { outcome: 'Close – no action' }),
       ],
       edges: [
         e('t1', 'a1'), e('d1', 'a1', 'data'), e('d2', 'a1', 'data'), e('a1', 'c1'),
-        e('c1', 'a2', 'high'), e('c1', 'h2', 'medium'), e('c1', 'a3', 'low'),
-        e('d3', 'a2', 'data'), e('d2', 'a2', 'data'), e('d4', 'a2', 'data'),
-        e('a2', 'h1'),
-        e('h1', 'o1', 'not_them'), e('h1', 'o2', 'clicked_only'), e('h1', 'o3', 'genuine'), e('h1', 'o4', 'unreachable'),
-        e('h2', 'o6', 'reset'), e('h2', 'o7', 'monitor'), e('h2', 'o8', 'unclear'),
-        e('a3', 'o5'),
+        e('c1', 'a2', 'high'), e('c1', 'h2', 'medium'), e('c1', 'a4', 'low'),
+        e('d3', 'a2', 'data'), e('d4', 'a2', 'data'), e('d1', 'a2', 'data'),
+        e('a2', 'a3'), e('d5', 'a3', 'data'),
+        e('a3', 'h1'),
+        e('h1', 'o1', 'not_them'), e('h1', 'o2', 'coached'), e('h1', 'o3', 'genuine'), e('h1', 'o4', 'unreachable'),
+        e('h2', 'o5', 'genuine'), e('h2', 'o6', 'not_them'), e('h2', 'o7', 'unclear'),
+        e('a4', 'o8'),
       ],
     };
   }
@@ -2408,10 +2457,14 @@ function mockFetch(node, ctx) {
       : { device_id: 'fp_2b80d4', first_seen: '3 years ago', emulator: false, shared_accounts: 1 };
     if (node.type === 'ds_customer') return { home_country: 'SA', home_city: 'Riyadh', tenure_years: 6, kyc_level: 'full', prior_disputes: 0, travel_notice: ctx.travel_notice ? country(gps.country) : null };
   }
-  if (ctx.case === 'phishing') {
-    if (node.type === 'ds_siem') return { failed_logins_7d: 0, new_src_ips: ctx.new_device_login ? 1 : 0, mfa_challenges: ctx.mfa ? ctx.clicked : 0, impossible_travel: !!ctx.new_device_login };
-    if (node.type === 'ds_transactions' && !ctx.new_payees) return { rows: 37, avg_monthly_spend: 1500, recent: [{ ts: '2026-10-09 12:05', amount: 160, payee: 'Grocery store, Riyadh', channel: 'card', new_payee: false }] };
-    if (node.type === 'ds_documents') return { files: 2, types: ['eml', 'html'], urls_found: 1, credential_form: true, quarantined: CAUGHT[ctx.caught] };
+  if (ctx.case === 'session') {
+    const loc = LOCS[ctx.ip_location];
+    if (node.type === 'ds_device') return { device: ctx.device, emulator: ctx.device === 'emulator', rooted: !!ctx.rooted, remote_access_app: !!ctx.remote_access, other_accounts: ctx.linked_accounts };
+    if (node.type === 'ds_behaviour') return { password: ctx.password_entry, own_details_typing: ctx.familiarity, pauses_and_window_switching: ctx.hesitation };
+    if (node.type === 'ds_phone') return { on_active_call: !!ctx.on_call, sim_swapped: ctx.sim_swap };
+    if (node.type === 'ds_session') return { network: ctx.network, city: loc.city, country: loc.country, after_login: ctx.after_login };
+    if (node.type === 'ds_transactions') return { rows: 37, avg_monthly_spend: 1500,
+      recent: ctx.after_login === 'payee' ? [{ ts: 'today', amount: ctx.amount, payee: 'New payee', channel: 'online transfer', new_payee: true }] : [] };
   }
   switch (node.type) {
     case 'ds_transactions': return {
@@ -2432,6 +2485,9 @@ function mockFetch(node, ctx) {
     case 'ds_siem': return { failed_logins_7d: 14, new_src_ips: 3, mfa_resets: 1, impossible_travel: true };
     case 'ds_threatintel': return { matches: 1, indicator: ctx.campaign_domain || ctx.ip_address || ctx.sender_domain || 'n/a', campaign: 'BlackCart-2026', confidence: ctx.campaign_domain ? 'high' : 'medium', domain_registered: ctx.campaign_domain ? 'yesterday' : undefined };
     case 'ds_documents': return { files: 2, types: ['eml', 'html'], urls_found: 1, credential_form: true };
+    case 'ds_behaviour': return { password: 'typed', own_details_typing: 'familiar', pauses_and_window_switching: 'none' };
+    case 'ds_phone': return { on_active_call: false, sim_swapped: 'no' };
+    case 'ds_session': return { network: 'normal', city: 'Riyadh', country: 'SA', after_login: 'none' };
     default: return { records: 1, note: 'Sample record from custom source' };
   }
 }
@@ -2479,6 +2535,13 @@ function simulateAgent(node, ctx, data) {
       break;
     }
     case 'enrichment': {
+      if (ctx.case === 'session') {
+        const flags = riskBreakdown(ctx).items.filter(([pt]) => pt > 0).slice(1).map(([, t]) => t[0].toUpperCase() + t.slice(1));
+        out = { anomalies: flags };
+        msg = flags.length ? `${flags.length} red flags.` : 'No red flags.';
+        story = flags.length ? { title: `Found ${flags.length} red flag${flags.length === 1 ? '' : 's'}`, items: flags } : { title: 'Nothing unusual found', text: 'Device, network and behaviour all match the customer’s usual pattern.' };
+        break;
+      }
       if (ctx.case === 'card') {
         const gps = LOCS[ctx.phone_gps], ip = LOCS[ctx.ip_location], anomalies = [];
         if (gps.country !== ip.country) anomalies.push(`Phone GPS is in ${gps.city}, but the connection comes from ${ip.city}, ${country(ip.country)}`);
@@ -2527,6 +2590,28 @@ function simulateAgent(node, ctx, data) {
       break;
     }
     case 'investigator': {
+      if (ctx.case === 'session') {
+        // Two different attacks: someone else is in the account, or the real customer is being coached
+        const takeover = [ctx.device !== 'usual', ctx.sim_swap !== 'no', ctx.password_entry !== 'typed', ctx.familiarity === 'unfamiliar', ctx.linked_accounts >= 5].filter(Boolean).length;
+        const scam = [ctx.on_call, ctx.remote_access, ctx.hesitation !== 'none'].filter(Boolean).length;
+        const kind = takeover >= 2 ? 'takeover' : scam >= 1 && (ctx.risk_score ?? 0) >= 40 ? 'scam' : null;
+        const confidence = round2(clamp(0.72 + (takeover + scam) * 0.04 + rnd(-0.02, 0.02), 0, 0.97));
+        const rationale = kind === 'takeover'
+          ? `${takeover} signs that someone other than the customer is logged in: ${(ctx.anomalies || []).slice(0, 4).join('; ')}.`
+          : kind === 'scam'
+          ? `The customer’s own device and network, but ${[ctx.on_call && 'an active phone call', ctx.remote_access && 'a remote-access app', ctx.hesitation !== 'none' && 'pauses and window-switching'].filter(Boolean).join(', ')}: the pattern of a customer being guided by a scammer.`
+          : 'Device, network and behaviour match the customer’s usual pattern.';
+        out = { verdict: kind ? 'FRAUD' : 'LEGITIMATE', scam_kind: kind, confidence, rationale,
+          recommended_action: kind === 'takeover' ? 'Secure the account' : kind === 'scam' ? 'Stop the payment and warn the customer' : 'No action' };
+        msg = `Verdict [${out.verdict}${kind ? ` · ${kind}` : ''}] at ${Math.round(confidence * 100)}% confidence.`;
+        story = {
+          title: `Verdict: ${kind === 'takeover' ? 'account takeover' : kind === 'scam' ? 'scam in progress' : 'looks genuine'} (${Math.round(confidence * 100)}% confident)`,
+          text: kind === 'takeover' ? 'Someone else is using the customer’s login. Recommends securing the account; sending this to a person to approve.'
+            : kind === 'scam' ? 'The real customer is being guided by a scammer. Recommends stopping the payment and warning the customer.'
+            : 'Recommends no action.',
+        };
+        break;
+      }
       const risk = ctx.risk_score ?? 50;
       const signals = (ctx.anomalies || []).length;
       const fraud = risk >= 65 || signals >= 2;
@@ -2592,7 +2677,8 @@ function askHuman(node, ctx) {
     const rows = KIOSK && ctx.case
       ? [...caseEvidence(ctx), ['Risk score', `${ctx.risk_score} / 100 (${ctx.severity})`]].map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`)
       : show.map((k) => `<dt>${esc(label(k))}</dt><dd>${esc(value(k, ctx[k]))}</dd>`);
-    if (ctx.anomalies?.length) rows.push(`<dt>${KIOSK ? 'Red flags' : 'anomalies'}</dt><dd>${ctx.anomalies.map(esc).join('<br>')}</dd>`);
+    // (the session case's evidence rows already list every signal, so its red flags would repeat them)
+    if (ctx.anomalies?.length && ctx.case !== 'session') rows.push(`<dt>${KIOSK ? 'Red flags' : 'anomalies'}</dt><dd>${ctx.anomalies.map(esc).join('<br>')}</dd>`);
     if (ctx.suspicious_transactions?.length) rows.push(`<dt>${KIOSK ? 'Suspicious payments' : 'suspicious transactions'}</dt><dd>${ctx.suspicious_transactions.map(esc).join('<br>')}</dd>`);
     if (ctx.rationale && !KIOSK) rows.push(`<dt>agent rationale</dt><dd>${esc(ctx.rationale)}</dd>`);
 
@@ -2699,8 +2785,8 @@ async function executeNode(node, ctx) {
     narrate({ icon: '⚡', cat: 'control', title: `Case ${ctx.case_id} opened`,
       text: ctx.case === 'card'
         ? `A ${money(ctx.amount)} payment at ${ctx.merchant} by customer ${ctx.user_id} at ${pad2(ctx.hour)}:00. Phone GPS: ${LOCS[ctx.phone_gps].city}; connection from ${LOCS[ctx.ip_location].city}${ctx.vpn ? ' via a VPN' : ''}${ctx.new_device ? ', on a new device' : ''}.`
-        : ctx.case === 'phishing'
-        ? `Our email security spotted ${Number(ctx.emails_sent).toLocaleString('en-US')} fake “${ctx.subject}” emails from ${ctx.campaign_domain} and quarantined them ${CAUGHT[ctx.caught]}. ${ctx.clicked ? `${ctx.clicked} customer${ctx.clicked === 1 ? '' : 's'} had clicked the link.` : 'Nobody clicked.'}`
+        : ctx.case === 'session'
+        ? `Our system flagged a session on customer ${ctx.user_id}’s account: ${{ usual: 'their usual phone', new: 'a new device', emulator: 'an emulator' }[ctx.device]}, connecting from ${LOCS[ctx.ip_location].city}${ctx.network === 'vpn' ? ' through a VPN' : ''}. ${{ none: 'Nothing was changed yet.', contact: 'The phone number or email was just changed.', payee: `A new payee was added and ${money(ctx.amount)} is being sent.` }[ctx.after_login]}`
         : ctx.campaign_domain
         ? `Our email security spotted ${ctx.emails_sent?.toLocaleString('en-US') ?? 'many'} fake “${ctx.subject}” emails from ${ctx.campaign_domain}. ${
             ctx.clicked === 0 ? `It quarantined every copy ${ctx.quarantined} — nobody clicked.`
@@ -3106,7 +3192,9 @@ function configBands() {
 }
 const CONFIG_KEYS = {
   fraud: ['cardPayment', { amount: 'amount', phoneGps: 'phone_gps', connectionFrom: 'ip_location', vpn: 'vpn', newDevice: 'new_device', hour: 'hour', merchant: 'merchant_type', travelNotice: 'travel_notice' }],
-  ato: ['phishing', { emailsSent: 'emails_sent', caught: 'caught', clicked: 'clicked', passwordEntered: 'password_entered', mfa: 'mfa', newDeviceLogin: 'new_device_login', newPayees: 'new_payees' }],
+  ato: ['accountTakeover', { device: 'device', rooted: 'rooted', remoteAccess: 'remote_access', network: 'network', connectionFrom: 'ip_location',
+    deviceOnOtherAccounts: 'linked_accounts', passwordEntry: 'password_entry', ownDetailsTyping: 'familiarity', pausesAndSwitching: 'hesitation',
+    onPhoneCall: 'on_call', simSwap: 'sim_swap', afterLogin: 'after_login', amount: 'amount' }],
 };
 function configSetup(name) {
   const [section, map] = CONFIG_KEYS[name] || [];
@@ -3118,7 +3206,6 @@ function configSetup(name) {
     if (c[key] === undefined) continue;
     const f = SETUP_FIELDS[name].find((x) => x.key === internal);
     let v = c[key];
-    if (internal === 'caught' && typeof v === 'string') { v = CAUGHT.indexOf(v.toLowerCase()); if (v < 0) continue; }
     if (f.type === 'range') { v = Number(v); if (Number.isFinite(v)) out[internal] = clamp(Math.round(v), f.min, f.max); }
     else if (f.type === 'toggle') { if (typeof v === 'boolean') out[internal] = v; }
     else if (f.options().some(([k]) => k === v)) out[internal] = v;
@@ -3154,7 +3241,7 @@ async function startScenario(name) {
 
 // Which configurable case a trigger node holds ('fraud' | 'ato'), from its payload
 function caseOf(trigger) {
-  try { const c = JSON.parse(trigger?.config.payload || '{}').case; return c === 'card' ? 'fraud' : c === 'phishing' ? 'ato' : null; } catch { return null; }
+  try { const c = JSON.parse(trigger?.config.payload || '{}').case; return c === 'card' ? 'fraud' : c === 'session' ? 'ato' : null; } catch { return null; }
 }
 const triggerNode = () => wf?.nodes.find((n) => n.type === 'trigger');
 const currentPayload = () => { try { return JSON.parse(triggerNode().config.payload); } catch { return {}; } };

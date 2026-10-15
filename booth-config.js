@@ -31,15 +31,21 @@ window.BOOTH_CONFIG = {
     // travelNotice: false,       // true | false (only matters when the phone is abroad)
   },
 
-  // How the "Phishing campaign" case is set up when a visitor opens it.
-  phishing: {
-    preset: 'Break-in',           // 'Break-in' | 'Passwords phished' | 'Blocked on arrival'
-    // emailsSent: 1240,          // 100 to 10000
-    // caught: 'after 2 hours',   // 'before delivery' | 'after 10 minutes' | 'after 30 minutes' | 'after 1 hour' | 'after 2 hours' | 'after 6 hours'
-    // clicked: 37,               // 0 to 100
-    // passwordEntered: true,     // true | false
-    // mfa: false,                // true | false
-    // newDeviceLogin: true,      // true | false
-    // newPayees: true,           // true | false
+  // How the "Account takeover & scams" case is set up when a visitor opens it.
+  accountTakeover: {
+    preset: 'Fraudster with a stolen password', // 'Fraudster with a stolen password' | 'Customer coached by a scammer' | 'New phone, genuine customer' | 'Normal login'
+    // device: 'new',             // usual | new | emulator
+    // rooted: false,             // true | false (ignored for an emulator)
+    // remoteAccess: false,       // true | false: a remote-access / screen-sharing app is running
+    // network: 'vpn',            // normal | vpn
+    // connectionFrom: 'bucharest', // riyadh | jeddah | dubai | lisbon | london | bucharest
+    // deviceOnOtherAccounts: 12, // 0 to 20 (ignored for the customer's usual phone)
+    // passwordEntry: 'pasted',   // typed | pasted | script
+    // ownDetailsTyping: 'unfamiliar', // familiar | unfamiliar
+    // pausesAndSwitching: 'none', // none | some | heavy
+    // onPhoneCall: false,        // true | false
+    // simSwap: '24h',            // no | 7d | 24h
+    // afterLogin: 'payee',       // none | contact | payee
+    // amount: 10550,             // SAR, 1000 to 50000 (used when afterLogin is 'payee')
   },
 };
